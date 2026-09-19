@@ -1,0 +1,104 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Build and release UniManager
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.7.1'
+
+      - name: Install semantic-release
+        run: >-
+          npm install --no-save
+          semantic-release
+          @semantic-release/commit-analyzer
+          @semantic-release/release-notes-generator
+          @semantic-release/github
+
+      - name: Prepare release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.UNIMANAGER_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.UNIMANAGER_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.UNIMANAGER_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.UNIMANAGER_KEY_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_BASE64" || {
+            echo "UNIMANAGER_KEYSTORE_BASE64 is not configured" >&2
+            exit 1
+          }
+          test -n "$KEYSTORE_PASSWORD" || {
+            echo "UNIMANAGER_KEYSTORE_PASSWORD is not configured" >&2
+            exit 1
+          }
+          test -n "$KEY_ALIAS" || {
+            echo "UNIMANAGER_KEY_ALIAS is not configured" >&2
+            exit 1
+          }
+          test -n "$KEY_PASSWORD" || {
+            echo "UNIMANAGER_KEY_PASSWORD is not configured" >&2
+            exit 1
+          }
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/unimanager-release.jks"
+
+      - name: Build release APK
+        run: gradle assembleRelease --no-daemon
+        env:
+          UNIMANAGER_KEYSTORE_FILE: ${{ runner.temp }}/unimanager-release.jks
+          UNIMANAGER_KEYSTORE_PASSWORD: ${{ secrets.UNIMANAGER_KEYSTORE_PASSWORD }}
+          UNIMANAGER_KEY_ALIAS: ${{ secrets.UNIMANAGER_KEY_ALIAS }}
+          UNIMANAGER_KEY_PASSWORD: ${{ secrets.UNIMANAGER_KEY_PASSWORD }}
+
+      - name: Upload APK workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: UniManager-apk
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+
+      - name: Run semantic-release
+        uses: cycjimmy/semantic-release-action@v6
+        id: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload APK to GitHub release
+        if: steps.release.outputs.new_release_published == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          gh release upload
+          "${{ steps.release.outputs.new_release_git_tag }}"
+          app/build/outputs/apk/release/app-release.apk
+          --clobber

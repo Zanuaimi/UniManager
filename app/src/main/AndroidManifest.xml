@@ -1,0 +1,36 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <permission
+        android:name="com.zanuaimi.unimanager.permission.BRIDGE"
+        android:description="@string/bridge_permission_description"
+        android:label="UniManager bridge"
+        android:protectionLevel="normal" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.UniManager">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".AppDetailsActivity"
+            android:exported="false" />
+
+        <service
+            android:name=".bridge.BridgeService"
+            android:exported="true"
+            android:permission="com.zanuaimi.unimanager.permission.BRIDGE">
+            <intent-filter>
+                <action android:name="com.zanuaimi.unimanager.BRIDGE" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

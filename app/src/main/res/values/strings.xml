@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">UniManager</string>
+    <string name="registered_apps">Registered apps</string>
+    <string name="empty_apps">No apps have registered with UniManager yet.</string>
+    <string name="protocol_summary">Bridge protocol v1 • register, read, update</string>
+    <string name="bridge_permission_description">Allows signed UniPatches clients to use the UniManager bridge.</string>
+</resources>
