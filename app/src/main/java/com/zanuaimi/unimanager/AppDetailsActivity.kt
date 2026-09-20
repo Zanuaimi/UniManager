@@ -60,9 +60,6 @@ class AppDetailsActivity : Activity() {
 
         val configuration = registry.configuration(appPackageName)
         addCapabilityControl(root, app, AppRegistry.CAPABILITY_BLOCK_ADS, "Block Ads", "block_ads", configuration)
-        addCapabilityControl(root, app, AppRegistry.CAPABILITY_ADS_REWARDS, "Skip rewarded ads", "skip_rewarded", configuration)
-        addCapabilityControl(root, app, AppRegistry.CAPABILITY_ADS_REWARDS, "Instant rewards", "instant_reward", configuration)
-        addCapabilityControl(root, app, AppRegistry.CAPABILITY_ADS_REWARDS, "Fake ad availability", "fake_ad_availability", configuration)
         addCapabilityControl(root, app, AppRegistry.CAPABILITY_BLOCK_HOSTS, "Block ad and tracking hosts", "block_hosts", configuration)
 
         val save = Button(this).apply {

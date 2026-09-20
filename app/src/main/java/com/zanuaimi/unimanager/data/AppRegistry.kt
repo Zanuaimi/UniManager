@@ -9,12 +9,10 @@ class AppRegistry(context: Context) {
         const val PROTOCOL_VERSION = 1
         const val CAPABILITY_OVERLAY = "overlay.config.v2"
         const val CAPABILITY_BLOCK_ADS = "block_ads.v1"
-        const val CAPABILITY_ADS_REWARDS = "ads_free_rewards.v1"
         const val CAPABILITY_BLOCK_HOSTS = "block_ads_hosts.v1"
         private val SUPPORTED_CAPABILITIES = setOf(
             CAPABILITY_OVERLAY,
             CAPABILITY_BLOCK_ADS,
-            CAPABILITY_ADS_REWARDS,
             CAPABILITY_BLOCK_HOSTS,
         )
     }
