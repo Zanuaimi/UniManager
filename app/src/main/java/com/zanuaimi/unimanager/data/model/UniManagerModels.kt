@@ -46,6 +46,11 @@ data class RefreshSettings(
     }
 }
 
+data class AppearanceSettings(
+    val colorSet: String = "dynamic",
+    val customAccent: String = "#FF5656",
+)
+
 sealed interface ScreenState<out T> {
     data object Loading : ScreenState<Nothing>
     data class Success<T>(val data: T) : ScreenState<T>

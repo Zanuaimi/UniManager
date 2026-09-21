@@ -6,9 +6,13 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -38,15 +43,15 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Switch
@@ -62,12 +67,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.CircleShape
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
@@ -111,6 +118,14 @@ private const val BACKUPS = "backups"
 private const val SETTINGS = "settings"
 private const val ABOUT = "about"
 
+private fun routeOrder(route: String?): Int = when {
+    route == null || route.startsWith(APPS) -> 0
+    route.startsWith(BACKUPS) || route.startsWith("picker") || route.startsWith("details") -> 1
+    route.startsWith(SETTINGS) || route.startsWith("strings") -> 2
+    route.startsWith(ABOUT) -> 3
+    else -> 0
+}
+
 @Composable
 fun UniManagerNavigation(navController: NavHostController = rememberNavController()) {
     val currentRoute by navController.currentBackStackEntryAsState()
@@ -121,25 +136,61 @@ fun UniManagerNavigation(navController: NavHostController = rememberNavControlle
         containerColor = UniManagerTheme.palette.background,
         bottomBar = {
             if (showBottomBar) {
-                NavigationBar(containerColor = UniManagerTheme.palette.surface) {
+                Box(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
+                    Surface(
+                        color = UniManagerTheme.palette.surface,
+                        shape = RoundedCornerShape(30.dp),
+                        shadowElevation = 12.dp,
+                        tonalElevation = 4.dp,
+                    ) {
+                        Row(Modifier.padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     listOf(
                         Triple(APPS, "Apps", Icons.Default.Apps),
                         Triple(BACKUPS, "Backups", Icons.Default.Build),
                         Triple(SETTINGS, "Settings", Icons.Default.Settings),
                         Triple(ABOUT, "About", Icons.Default.Info),
                     ).forEach { (route, label, icon) ->
-                        NavigationBarItem(
-                            selected = mainRoute == route,
+                        val selected = mainRoute == route
+                        Surface(
                             onClick = { navController.navigate(route) { popUpTo(APPS); launchSingleTop = true } },
-                            icon = { Icon(icon, label) },
-                            label = { Text(label) },
-                        )
+                            color = if (selected) UniManagerTheme.palette.accentDark else Color.Transparent,
+                            contentColor = Color.White,
+                            shape = CircleShape,
+                            modifier = Modifier.animateContentSize(),
+                        ) {
+                            Row(Modifier.padding(horizontal = 13.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(icon, label, Modifier.size(21.dp))
+                                AnimatedVisibility(
+                                    visible = selected,
+                                    enter = expandHorizontally() + fadeIn(),
+                                    exit = shrinkHorizontally() + fadeOut(),
+                                ) {
+                                    Text(label, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp))
+                                }
+                            }
+                        }
+                    }
+                        }
                     }
                 }
             }
         },
     ) { padding ->
-        NavHost(navController, startDestination = APPS, modifier = Modifier.padding(padding)) {
+        NavHost(
+            navController,
+            startDestination = APPS,
+            modifier = Modifier.padding(padding).fillMaxSize(),
+            enterTransition = {
+                val movingForward = routeOrder(initialState.destination.route) < routeOrder(targetState.destination.route)
+                if (movingForward) slideInHorizontally(initialOffsetX = { -it })
+                else slideInHorizontally(initialOffsetX = { it })
+            },
+            exitTransition = {
+                val movingForward = routeOrder(initialState.destination.route) < routeOrder(targetState.destination.route)
+                if (movingForward) slideOutHorizontally(targetOffsetX = { it })
+                else slideOutHorizontally(targetOffsetX = { -it })
+            },
+        ) {
             composable(APPS) { AppsScreen(navController) }
             composable(BACKUPS) { PlaceholderScreen("Backups", "Coming Soon") }
             composable(SETTINGS) { SettingsScreen() }
@@ -170,9 +221,15 @@ private fun AppsScreen(navController: NavHostController, viewModel: AppsViewMode
     val lifecycleOwner = LocalLifecycleOwner.current
     var deleteTarget by remember { mutableStateOf<RegisteredApp?>(null) }
     var refreshing by remember { mutableStateOf(false) }
+    var pullDistance by remember { mutableStateOf(0f) }
     val scroll = rememberScrollState()
     LaunchedEffect(refreshing) {
-        if (refreshing) { viewModel.refresh(forceScan = true); delay(350); refreshing = false }
+        if (refreshing) {
+            viewModel.refresh(forceScan = true)
+            delay(350)
+            refreshing = false
+            pullDistance = 0f
+        }
     }
     androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -192,9 +249,14 @@ private fun AppsScreen(navController: NavHostController, viewModel: AppsViewMode
                     Modifier.pointerInput(Unit) {
                         var distance = 0f
                         detectVerticalDragGestures(
-                            onVerticalDrag = { _, drag -> distance += drag },
-                            onDragEnd = { if (distance > 100f && scroll.value == 0) refreshing = true; distance = 0f },
-                            onDragCancel = { distance = 0f },
+                            onVerticalDrag = { _, drag ->
+                                if (scroll.value == 0 && drag > 0f) {
+                                    distance += drag
+                                    pullDistance = distance.coerceIn(0f, 140f)
+                                }
+                            },
+                            onDragEnd = { if (distance > 100f && scroll.value == 0) refreshing = true; distance = 0f; if (!refreshing) pullDistance = 0f },
+                            onDragCancel = { distance = 0f; pullDistance = 0f },
                         )
                     }
                 } else {
@@ -220,6 +282,19 @@ private fun AppsScreen(navController: NavHostController, viewModel: AppsViewMode
             containerColor = UniManagerTheme.palette.accentDark,
             modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
         ) { Text("+", fontSize = 24.sp) }
+        if (pullDistance > 0f || refreshing) {
+            Box(Modifier.align(Alignment.TopCenter).padding(top = 10.dp)) {
+                if (refreshing) {
+                    CircularProgressIndicator(Modifier.size(34.dp), color = UniManagerTheme.palette.accent, strokeWidth = 3.dp)
+                } else {
+                    Box(
+                        Modifier.size(34.dp)
+                            .alpha((pullDistance / 100f).coerceIn(0f, 1f))
+                            .background(UniManagerTheme.palette.accentDark, androidx.compose.foundation.shape.CircleShape),
+                    )
+                }
+            }
+        }
     }
     deleteTarget?.let { app ->
         AlertDialog(
@@ -322,11 +397,52 @@ private fun InstalledAppCard(app: InstalledApp, onClick: () -> Unit) {
 @Composable
 private fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     val settings by viewModel.state.collectAsStateWithLifecycle()
+    val appearance by viewModel.appearance.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     var value by remember(settings.cooldownValue) { mutableStateOf(settings.cooldownValue.toString()) }
     var unitMenu by remember { mutableStateOf(false) }
+    var colorSetMenu by remember { mutableStateOf(false) }
+    var accentMenu by remember { mutableStateOf(false) }
+    var customAccent by remember(appearance.customAccent) { mutableStateOf(appearance.customAccent) }
+    val accentChoices = listOf("Red" to "#FF5656", "Blue" to "#5599FF", "Yellow" to "#FFCC33", "Green" to "#55CC88", "Black" to "#111111", "Aqua" to "#33CCCC")
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
         ScreenHeader("Settings")
+        Spacer(Modifier.height(12.dp))
+        ExpandableCard("Appearance") {
+            Text("Color set", fontWeight = FontWeight.Bold)
+            Box {
+                OutlinedButton(onClick = { colorSetMenu = true }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
+                    Text(when (appearance.colorSet) { "dynamic" -> "Dynamic Color"; "custom" -> "Custom Accent Color"; else -> "UniPatches colorset" })
+                }
+                DropdownMenu(expanded = colorSetMenu, onDismissRequest = { colorSetMenu = false }) {
+                    listOf("unipatches" to "UniPatches colorset", "dynamic" to "Dynamic Color", "custom" to "Custom Accent Color").forEach { (key, label) ->
+                        DropdownMenuItem(text = { Text(label) }, onClick = { colorSetMenu = false; viewModel.updateAppearance(appearance.copy(colorSet = key)) })
+                    }
+                }
+            }
+            if (appearance.colorSet == "custom") {
+                Text("Custom accent color", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp))
+                Box {
+                    OutlinedButton(onClick = { accentMenu = true }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
+                        Text(accentChoices.firstOrNull { it.second.equals(customAccent, true) }?.first ?: "Custom color")
+                    }
+                    DropdownMenu(expanded = accentMenu, onDismissRequest = { accentMenu = false }) {
+                        accentChoices.forEach { (label, color) ->
+                            DropdownMenuItem(text = { Text(label) }, onClick = {
+                                accentMenu = false
+                                customAccent = color
+                                viewModel.updateAppearance(appearance.copy(colorSet = "custom", customAccent = color))
+                            })
+                        }
+                        DropdownMenuItem(text = { Text("Custom color editor") }, onClick = { accentMenu = false })
+                    }
+                }
+                OutlinedTextField(customAccent, { customAccent = it }, label = { Text("#RRGGBB") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp), singleLine = true)
+                Button(onClick = { viewModel.updateAppearance(appearance.copy(customAccent = customAccent)) }, modifier = Modifier.padding(top = 8.dp)) { Text("Set color") }
+            } else {
+                Text("Custom accent choices apply only when Custom Accent Color is selected.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+            }
+        }
         Spacer(Modifier.height(12.dp))
         ExpandableCard("Refresh feature") {
             SettingSwitch("Enable Refresh upon pulling down from top of list", "Allow a manual pull-down gesture to scan for newly registered or updated patched apps.", settings.pullToRefresh) { viewModel.update(settings.copy(pullToRefresh = it)) }
@@ -367,7 +483,8 @@ private fun AboutScreen(viewModel: AboutViewModel = viewModel()) {
                 AppIcon(context.getDrawable(R.mipmap.ic_launcher), "UniManager app logo", Modifier.size(92.dp))
                 Text(context.getString(R.string.app_name), fontWeight = FontWeight.Bold, fontSize = 22.sp)
                 Text("Version ${BuildConfig.VERSION_NAME}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Button(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Zanuaimi/UniManager"))) }, modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) { Text("UniManager repository  GitHub") }
+                Text("by Zanuaimi", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                Button(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Zanuaimi/UniManager"))) }, modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) { Text("UniManager GitHub Repository") }
             }
         }
         Spacer(Modifier.height(12.dp))

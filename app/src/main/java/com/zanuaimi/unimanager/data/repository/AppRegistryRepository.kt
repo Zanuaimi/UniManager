@@ -29,8 +29,8 @@ class AppRegistryRepository(context: Context) {
         }
 
     suspend fun register(payload: JSONObject): Boolean = withContext(Dispatchers.IO) {
-        registry.register(payload.toString()).let { response ->
-            response != "{\"status\":\"registration_failed\"}"
+        registry.register(payload.toString(), clearRemoval = true).let { response ->
+            JSONObject(response).optString("status").isBlank()
         }
     }
 

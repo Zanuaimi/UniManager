@@ -58,12 +58,9 @@ jobs:
           printf '%s\n' "$release_output"
           release_version="$(printf '%s\n' "$release_output" | sed -nE 's/.*next release version is ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | tail -n 1)"
           if [ -z "$release_version" ]; then
-            release_version="0.1.0"
-          fi
-          test -n "$release_version" || {
             echo "Could not determine UniManager version" >&2
             exit 1
-          }
+          fi
           echo "UNIMANAGER_VERSION=$release_version" >> "$GITHUB_ENV"
           echo "Using UniManager version $release_version (semantic-release dry-run status: $release_status)"
 

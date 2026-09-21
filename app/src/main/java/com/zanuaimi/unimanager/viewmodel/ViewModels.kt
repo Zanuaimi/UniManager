@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.zanuaimi.unimanager.data.InstalledAppScanner
 import com.zanuaimi.unimanager.data.model.AppVisibility
+import com.zanuaimi.unimanager.data.model.AppearanceSettings
 import com.zanuaimi.unimanager.data.model.InstalledApp
 import com.zanuaimi.unimanager.data.model.RefreshSettings
 import com.zanuaimi.unimanager.data.model.RegisteredApp
@@ -16,6 +17,7 @@ import com.zanuaimi.unimanager.data.repository.AppRegistryRepository
 import com.zanuaimi.unimanager.data.repository.InstalledAppRepository
 import com.zanuaimi.unimanager.data.repository.SettingsRepository
 import com.zanuaimi.unimanager.data.repository.UpdateRepository
+import com.zanuaimi.unimanager.ui.theme.UniManagerTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -145,8 +147,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val state: StateFlow<RefreshSettings> = _state.asStateFlow()
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
+    private val _appearance = MutableStateFlow(AppearanceSettings())
+    val appearance: StateFlow<AppearanceSettings> = _appearance.asStateFlow()
 
-    init { viewModelScope.launch { _state.value = repository.read() } }
+    init { viewModelScope.launch { _state.value = repository.read(); _appearance.value = repository.readAppearance() } }
 
     fun update(settings: RefreshSettings) {
         if (settings.cooldownValue <= 0 || settings.rawCooldownSeconds() < InstalledAppScanner.MIN_REFRESH_COOLDOWN_SECONDS) {
@@ -156,6 +160,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         _state.value = settings
         _message.value = "Saved"
         viewModelScope.launch { repository.save(settings) }
+    }
+
+    fun updateAppearance(settings: AppearanceSettings) {
+        _appearance.value = settings
+        UniManagerTheme.setAppearance(settings)
+        viewModelScope.launch { repository.saveAppearance(settings) }
     }
 }
 

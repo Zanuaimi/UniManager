@@ -7,7 +7,10 @@ import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.LaunchedEffect
+import com.zanuaimi.unimanager.data.repository.SettingsRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.zanuaimi.unimanager.ui.navigation.UniManagerNavigation
 import com.zanuaimi.unimanager.ui.theme.UniManagerTheme
 
@@ -17,10 +20,11 @@ class MainActivity : ComponentActivity() {
         window.statusBarColor = UiKit.background
         window.navigationBarColor = UiKit.background
         setContent {
+            LaunchedEffect(Unit) {
+                UniManagerTheme.setAppearance(withContext(Dispatchers.IO) { SettingsRepository(applicationContext).readAppearance() })
+            }
             UniManagerTheme {
-                MaterialTheme(colorScheme = UniManagerTheme.colors) {
-                    UniManagerNavigation()
-                }
+                UniManagerNavigation()
             }
         }
     }

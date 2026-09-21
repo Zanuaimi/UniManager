@@ -7,6 +7,7 @@ import android.os.Parcel
 import android.os.IBinder
 import org.json.JSONObject
 import com.zanuaimi.unimanager.data.AppRegistry
+import java.nio.charset.StandardCharsets
 
 class BridgeService : Service() {
     private val registry by lazy { AppRegistry(this) }
@@ -25,7 +26,7 @@ class BridgeService : Service() {
                 return true
             }
             val payload = data.readString().orEmpty()
-            val response = if (payload.length > MAX_PAYLOAD_LENGTH) {
+            val response = if (payload.toByteArray(StandardCharsets.UTF_8).size > MAX_PAYLOAD_LENGTH) {
                 "{\"status\":\"payload_too_large\"}"
             } else if (!isCallerAuthorized(payload)) {
                 "{\"status\":\"unauthorized_caller\"}"
@@ -40,7 +41,11 @@ class BridgeService : Service() {
                 }.getOrElse { "{\"status\":\"invalid_request\"}" }
             }
             reply.writeNoException()
-            reply.writeString(response)
+            reply.writeString(
+                if (response.toByteArray(StandardCharsets.UTF_8).size > MAX_PAYLOAD_LENGTH) {
+                    "{\"status\":\"response_too_large\"}"
+                } else response,
+            )
             return true
         }
     }

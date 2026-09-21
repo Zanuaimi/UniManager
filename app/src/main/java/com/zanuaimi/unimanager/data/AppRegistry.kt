@@ -3,6 +3,7 @@ package com.zanuaimi.unimanager.data
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import java.nio.charset.StandardCharsets
 
 class AppRegistry(context: Context) {
     companion object {
@@ -15,16 +16,20 @@ class AppRegistry(context: Context) {
             CAPABILITY_BLOCK_ADS,
             CAPABILITY_BLOCK_HOSTS,
         )
+        const val MAX_PAYLOAD_BYTES = 512 * 1024
     }
 
     private val preferences = context.getSharedPreferences("registered_apps", Context.MODE_PRIVATE)
+    private val removalPreferences = context.getSharedPreferences("removed_app_entries", Context.MODE_PRIVATE)
 
     @Synchronized
-    fun register(payload: String): String {
+    fun register(payload: String, clearRemoval: Boolean = false): String {
+        if (payload.toByteArray(StandardCharsets.UTF_8).size > MAX_PAYLOAD_BYTES) return "{\"status\":\"payload_too_large\"}"
         val incoming = parse(payload) ?: return "{}"
         val packageName = canonicalPackageName(incoming.optString("package_name"))
         if (packageName.isBlank()) return "{}"
         incoming.put("package_name", packageName)
+        if (clearRemoval) removalPreferences.edit().remove(packageName).commit()
         val current = parse(preferences.getString(packageName, null)) ?: JSONObject()
         val merged = JSONObject(current.toString())
         val keys = incoming.keys()
@@ -41,7 +46,9 @@ class AppRegistry(context: Context) {
         merged.put("manager_last_seen_at", System.currentTimeMillis())
         // Registration is a patch-install/update event. Commit it before replying so
         // a manager or host process crash cannot acknowledge an unpersisted record.
-        if (!preferences.edit().putString(packageName, merged.toString()).commit()) {
+        val serialized = merged.toString()
+        if (serialized.toByteArray(StandardCharsets.UTF_8).size > MAX_PAYLOAD_BYTES) return "{\"status\":\"payload_too_large\"}"
+        if (!preferences.edit().putString(packageName, serialized).commit()) {
             return "{\"status\":\"registration_failed\"}"
         }
         return configuration(merged)
@@ -59,6 +66,7 @@ class AppRegistry(context: Context) {
 
     @Synchronized
     fun update(payload: String): String {
+        if (payload.toByteArray(StandardCharsets.UTF_8).size > MAX_PAYLOAD_BYTES) return "{\"status\":\"payload_too_large\"}"
         val incoming = parse(payload) ?: return "{}"
         val packageName = canonicalPackageName(incoming.optString("package_name"))
         if (packageName.isBlank()) return "{}"
@@ -72,7 +80,9 @@ class AppRegistry(context: Context) {
         merge(configuration, incomingConfiguration)
         merged.put("configuration", configuration)
         merged.put("manager_last_updated_at", System.currentTimeMillis())
-        if (!preferences.edit().putString(packageName, merged.toString()).commit()) return "{}"
+        val serialized = merged.toString()
+        if (serialized.toByteArray(StandardCharsets.UTF_8).size > MAX_PAYLOAD_BYTES) return "{\"status\":\"payload_too_large\"}"
+        if (!preferences.edit().putString(packageName, serialized).commit()) return "{}"
         return configuration(merged)
     }
 
@@ -82,18 +92,36 @@ class AppRegistry(context: Context) {
         val canonicalName = canonicalPackageName(packageName)
         if (canonicalName.isBlank()) return false
         val current = parse(preferences.getString(canonicalName, null)) ?: return false
+        if (status(current).kind != StatusKind.READY) return false
         val configuration = JSONObject(current.optJSONObject("configuration")?.toString() ?: "{}")
         merge(configuration, values)
         current.put("configuration", configuration)
         current.put("manager_last_updated_at", System.currentTimeMillis())
-        return preferences.edit().putString(canonicalName, current.toString()).commit()
+        val serialized = current.toString()
+        if (serialized.toByteArray(StandardCharsets.UTF_8).size > MAX_PAYLOAD_BYTES) return false
+        return preferences.edit().putString(canonicalName, serialized).commit()
     }
 
     @Synchronized
     fun remove(packageName: String): Boolean {
         val canonicalName = canonicalPackageName(packageName)
         if (canonicalName.isBlank()) return false
-        return preferences.edit().remove(canonicalName).commit()
+        val fingerprint = parse(preferences.getString(canonicalName, null))
+            ?.optString("manager_metadata_fingerprint")
+            .orEmpty()
+        val removed = preferences.edit().remove(canonicalName).commit()
+        if (!removed) return false
+        return removalPreferences.edit().putString(canonicalName, fingerprint).commit()
+    }
+
+    fun isRemovalTombstoneCurrent(packageName: String, fingerprint: String): Boolean {
+        val canonicalName = canonicalPackageName(packageName)
+        return canonicalName.isNotBlank() && removalPreferences.getString(canonicalName, null) == fingerprint
+    }
+
+    fun clearRemoval(packageName: String) {
+        val canonicalName = canonicalPackageName(packageName)
+        if (canonicalName.isNotBlank()) removalPreferences.edit().remove(canonicalName).apply()
     }
 
     fun get(packageName: String): JSONObject? {

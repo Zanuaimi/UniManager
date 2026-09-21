@@ -19,6 +19,8 @@ object InstalledAppScanner {
     const val KEY_ENABLE_AUTO_REFRESH = "enable_auto_refresh"
     const val KEY_AUTO_REFRESH_VALUE = "auto_refresh_value"
     const val KEY_AUTO_REFRESH_UNIT = "auto_refresh_unit"
+    const val KEY_COLOR_SET = "color_set"
+    const val KEY_CUSTOM_ACCENT = "custom_accent"
     const val MIN_REFRESH_COOLDOWN_SECONDS = RefreshSettings.MIN_COOLDOWN_SECONDS
 
     /** Avoids repeating the package-manager scan during rapid Activity resumes. */
@@ -79,10 +81,13 @@ object InstalledAppScanner {
             val packageName = application.packageName
             val fingerprint = fingerprint(application, encoded)
             val cachedFingerprint = preferences.getString("fingerprint_$packageName", null)
+            if (registry.isRemovalTombstoneCurrent(packageName, fingerprint)) return@forEach
             if (cachedFingerprint == fingerprint && registry.get(packageName) != null) return@forEach
             val registration = registrationFor(context, application) ?: return@forEach
+            registration.put("manager_metadata_fingerprint", fingerprint)
+            registry.clearRemoval(packageName)
             val result = runCatching { JSONObject(registry.register(registration.toString())) }.getOrNull()
-            if (result?.optString("status") != "registration_failed") {
+            if (result != null && result.optString("status").isBlank()) {
                 preferences.edit().putString("fingerprint_$packageName", fingerprint).apply()
                 imported++
             }
