@@ -1,6 +1,7 @@
 package com.zanuaimi.unimanager.ui.navigation
 
 import android.content.Context
+import android.content.ClipData
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -75,7 +76,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.shape.CircleShape
-import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -505,8 +505,19 @@ private fun installDownloadedApk(context: Context, file: java.io.File) {
         context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")))
         return
     }
-    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-    context.startActivity(Intent(Intent.ACTION_VIEW).apply { setDataAndType(uri, "application/vnd.android.package-archive"); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK) })
+    // UpdateFileProvider serves only files from cacheDir/updates. Build its URI directly
+    // instead of calling AndroidX FileProvider, which requires FILE_PROVIDER_PATHS metadata
+    // that the custom provider intentionally does not use.
+    val uri = Uri.Builder()
+        .scheme("content")
+        .authority("${context.packageName}.fileprovider")
+        .appendPath(file.name)
+        .build()
+    context.startActivity(Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, "application/vnd.android.package-archive")
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        clipData = ClipData.newRawUri("UniManager update", uri)
+    })
 }
 
 @Composable
