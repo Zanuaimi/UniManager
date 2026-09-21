@@ -484,6 +484,9 @@ class MainActivity : Activity() {
         identity.addView(ImageView(this).apply {
             setImageResource(R.drawable.ic_launcher)
             scaleType = ImageView.ScaleType.CENTER_INSIDE
+            contentDescription = "UniManager app logo"
+            background = UiKit.rounded(android.graphics.Color.TRANSPARENT, dp(22), UiKit.outline)
+            clipToOutline = true
         }, LinearLayout.LayoutParams(dp(92), dp(92)))
         identity.addView(UiKit.text(this, getString(R.string.app_name), 22f).apply {
             gravity = Gravity.CENTER

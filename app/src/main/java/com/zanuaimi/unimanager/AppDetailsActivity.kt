@@ -144,8 +144,8 @@ class AppDetailsActivity : Activity() {
         val configuration = registry.configuration(appPackageName)
         val groups = linkedMapOf<String, MutableList<String>>()
         val genericKeys = mutableListOf<String>()
-        if (registry.hasCapability(app, AppRegistry.CAPABILITY_BLOCK_ADS)) groups.getOrPut("Control App Ads") { mutableListOf() }.add("block_ads")
-        if (registry.hasCapability(app, AppRegistry.CAPABILITY_BLOCK_HOSTS)) groups.getOrPut("Control App Ads") { mutableListOf() }.add("block_hosts")
+        if (registry.hasCapability(app, AppRegistry.CAPABILITY_BLOCK_ADS)) groups.getOrPut("Ads Block Patch") { mutableListOf() }.add("block_ads")
+        if (registry.hasCapability(app, AppRegistry.CAPABILITY_BLOCK_HOSTS)) groups.getOrPut("Ads Block Patch") { mutableListOf() }.add("block_hosts")
         val keys = configuration.keys()
         while (keys.hasNext()) {
             val key = keys.next()

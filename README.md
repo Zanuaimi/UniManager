@@ -1,64 +1,88 @@
 # UniManager
 
-UniManager is the optional companion app for UniPatches. The first implementation
-stores patched-app registrations locally, displays their label, package name, and
-icon, and exposes a versioned Binder bridge for patched APKs.
+<p align="center">
+  <img src="images/UniPatchesIcon3.png" alt="UniPatches" width="160">
+</p>
 
-The bridge is intentionally optional. UniPatches clients embed their patch-time
-defaults and continue working when this app is stopped, uninstalled, incompatible,
-or when a registered app is removed from this app.
+<p align="center"><strong>The companion app for UniPatches-enabled APKs.</strong></p>
 
-## Bridge contract
+UniManager keeps configuration for patched Android apps in a separate app. This
+means settings can survive an APK uninstall or repatch, instead of being stored
+only inside the patched app.
 
-- Service action: `com.zanuaimi.unimanager.BRIDGE`
-- Bridge permission: `com.zanuaimi.unimanager.permission.BRIDGE` (normal protection,
-  because patched APKs are signed by their original app owners rather than by
-  UniManager)
-- Protocol version: `1`
-- Binder transactions: `1` register, `2` read, `3` update
-- Registration payloads are JSON and include `package_name`, `app_label`, and
-  independently versioned capability identifiers such as `overlay.config.v2`.
-  The package name is the app identity: repeated registrations update the same
-  entry, while cloned apps remain separate when their package names differ.
+## What it does
 
-The app currently provides the first functional manager UI. Settings screens,
-backups, profiles, and save slots remain later phases.
+- Discovers installed APKs patched with UniPatches integration.
+- Adds each supported app to the Apps list using its app name, package name,
+  version, and icon.
+- Keeps one app entry per package name, so repatching updates the existing entry.
+- Stores patch settings and versioned capabilities such as
+  `overlay.config.v2` and `block_ads.v1`.
+- Provides per-app configuration for supported settings, including switches,
+  colors, file and folder inputs, nested groups, and list editors.
+- Includes a dedicated editor for Universal Overlay multi-part icon strings.
+- Provides startup configuration and runtime synchronization for supported
+  UniPatches integrations.
+- Falls back safely to the settings embedded during patching when UniManager is
+  unavailable or an app entry has been removed.
 
-The current basic UI includes an app details screen with patch and capability
-versions, compatibility/repatch status, and startup controls for supported ad
-capabilities. Unknown registration fields and capabilities are retained in the
-stored JSON record so newer patch versions do not get erased by an older manager.
+## Getting started
 
-Configuration values are rendered from the registration payload. Boolean values,
-colors, file and folder inputs, and list-valued settings are supported. List
-values such as Universal Overlay multi-part icon definitions open in a dedicated
-editor where each string can be added, edited, or removed before saving.
+1. Install UniManager on the Android device.
+2. Patch an APK with a UniPatches patch that supports UniManager integration.
+3. Enable UniManager integration in the patch settings.
+4. Install the patched APK.
+5. Open UniManager and refresh the Apps list if the app does not appear
+   automatically.
+6. Open the app entry to adjust its supported settings.
 
-When UniManager opens, it scans installed applications for the UniPatches
-registration marker embedded in integrated APK manifests. The scanner throttles
-package-manager scans, fingerprints each integrated APK, and skips unchanged
-registrations. This lets an integrated app appear after installation even
-before its first launch without repeatedly decoding and rewriting every app.
-The runtime Binder bridge remains available for startup configuration and live
-runtime synchronization.
+Universal Overlay and Ads Block Patch can use UniManager for persistent startup
+configuration. Universal Overlay remains optional. A patch continues to work
+without UniManager by using the settings selected during patching.
 
-Patched apps use the read transaction during normal launches. Registration is
-performed from embedded APK metadata during the manager scan, so launch-time
-reads cannot overwrite manager settings. A newly patched APK or newly added
-capability can extend an existing record, and registration is committed before
-the bridge acknowledges it so a process crash cannot acknowledge an unsaved
-registration.
+## App sections
 
-## Signed releases
+- **Apps** - View registered patched apps and open their configuration pages.
+- **Backups** - Reserved for backup and restore features.
+- **Settings** - Configure pull-to-refresh and automatic refresh behavior.
+- **About** - View UniManager information, repository details, and available
+  updates.
 
-The release workflow requires these GitHub Actions secrets:
+## Refresh behavior
 
-- `UNIMANAGER_KEYSTORE_BASE64`
-- `UNIMANAGER_KEYSTORE_PASSWORD`
-- `UNIMANAGER_KEY_ALIAS`
-- `UNIMANAGER_KEY_PASSWORD`
+The Apps list supports manual pull-to-refresh and optional automatic refreshing.
+Both behaviors can be enabled or disabled in Settings. The automatic refresh
+cooldown accepts seconds, minutes, hours, or days, with a minimum of 30 seconds.
 
-Create the keystore once, convert it to Base64, and add the resulting values as
-repository secrets. Keep the keystore and passwords outside the repository. The
-workflow decodes the keystore into the temporary runner directory, signs the
-release APK, and uploads the signed APK to the GitHub release.
+## Compatibility and fallback behavior
+
+UniManager is optional. If it is not installed, is unavailable, or cannot be
+reached, the patched APK uses its embedded patch settings. Removing an app entry
+from UniManager has the same fallback behavior.
+
+Registrations are keyed by Android package name. Repatching the same package
+updates its existing registration and can add newly available patch capabilities.
+Cloned APKs with different package names are tracked as separate apps.
+
+## Download
+
+Stable APKs are published on the [GitHub Releases](https://github.com/Zanuaimi/UniManager/releases)
+page. Android may require permission to install apps from unknown sources when
+installing a release APK outside Google Play.
+
+## Related project
+
+UniManager works with [UniPatches](https://github.com/Zanuaimi/UniPatches), the
+Morphe patch collection that provides Universal Overlay, Ads Block Patch, and
+other Android patch features.
+
+## For contributors
+
+The project is an Android application written in Kotlin. Build a debug APK with:
+
+```bash
+../UniPatches/gradlew assembleDebug
+```
+
+The release workflow builds a signed `UniManager.apk` when the repository's
+release signing secrets are configured.
