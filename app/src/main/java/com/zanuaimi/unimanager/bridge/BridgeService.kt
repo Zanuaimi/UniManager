@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Binder
 import android.os.Parcel
 import android.os.IBinder
+import org.json.JSONObject
 import com.zanuaimi.unimanager.data.AppRegistry
 
 class BridgeService : Service() {
@@ -24,16 +25,38 @@ class BridgeService : Service() {
                 return true
             }
             val payload = data.readString().orEmpty()
-            val response = when (code) {
-                1 -> registry.register(payload)
-                2 -> registry.read(payload)
-                3 -> registry.update(payload)
-                else -> "{\"status\":\"unsupported_operation\"}"
+            val response = if (payload.length > MAX_PAYLOAD_LENGTH) {
+                "{\"status\":\"payload_too_large\"}"
+            } else if (!isCallerAuthorized(payload)) {
+                "{\"status\":\"unauthorized_caller\"}"
+            } else {
+                runCatching {
+                    when (code) {
+                        1 -> registry.register(payload)
+                        2 -> registry.read(payload)
+                        3 -> registry.update(payload)
+                        else -> "{\"status\":\"unsupported_operation\"}"
+                    }
+                }.getOrElse { "{\"status\":\"invalid_request\"}" }
             }
             reply.writeNoException()
             reply.writeString(response)
             return true
         }
+    }
+
+    private companion object {
+        // Keep requests well below Binder's transaction limit. Configuration payloads do not
+        // contain the optional overlay image, so 512 KiB leaves room for Binder framing.
+        const val MAX_PAYLOAD_LENGTH = 512 * 1024
+    }
+
+    private fun isCallerAuthorized(payload: String): Boolean {
+        val packageName = runCatching { JSONObject(payload).optString("package_name").trim() }
+            .getOrDefault("")
+        if (packageName.isBlank()) return false
+        return packageManager.getPackagesForUid(Binder.getCallingUid())
+            ?.contains(packageName) == true
     }
 
     override fun onBind(intent: Intent?): IBinder = binder

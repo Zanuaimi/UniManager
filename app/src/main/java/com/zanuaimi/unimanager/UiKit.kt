@@ -41,6 +41,7 @@ object UiKit {
     }
 
     fun animateAppear(view: View, delay: Long = 0L) {
+        view.animate().cancel()
         view.alpha = 0f
         view.translationY = 18f
         view.scaleX = 0.98f
@@ -57,7 +58,9 @@ object UiKit {
     }
 
     fun animatePress(view: View) {
+        view.animate().cancel()
         view.animate().scaleX(0.96f).scaleY(0.96f).setDuration(70).withEndAction {
+            view.animate().cancel()
             view.animate().scaleX(1f).scaleY(1f).setDuration(140).start()
         }.start()
     }

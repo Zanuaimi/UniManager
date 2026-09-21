@@ -1,0 +1,6 @@
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:inset="18dp">
+    <bitmap
+        android:src="@drawable/unipatches_icon"
+        android:gravity="fill" />
+</inset>

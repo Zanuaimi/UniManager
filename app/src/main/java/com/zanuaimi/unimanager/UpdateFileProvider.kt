@@ -23,10 +23,18 @@ class UpdateFileProvider : ContentProvider() {
     override fun getType(uri: Uri): String = "application/vnd.android.package-archive"
 
     override fun query(uri: Uri, projection: Array<out String>?, selection: String?, selectionArgs: Array<out String>?, sortOrder: String?): Cursor {
-        val file = File(requireNotNull(context).cacheDir, "updates/${uri.lastPathSegment}")
+        val file = resolveFile(uri)
         val cursor = MatrixCursor(arrayOf("_display_name", "_size"))
-        cursor.addRow(arrayOf(file.name, file.length()))
+        if (file.isFile) cursor.addRow(arrayOf(file.name, file.length()))
         return cursor
+    }
+
+    private fun resolveFile(uri: Uri): File {
+        val appContext = requireNotNull(context)
+        val root = File(appContext.cacheDir, "updates").canonicalFile
+        val file = File(root, uri.lastPathSegment.orEmpty()).canonicalFile
+        require(file.path.startsWith(root.path + File.separator) && file.isFile) { "Unknown update file" }
+        return file
     }
 
     override fun insert(uri: Uri, values: ContentValues?): Uri? = null

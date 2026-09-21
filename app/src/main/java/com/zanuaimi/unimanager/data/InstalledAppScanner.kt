@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.util.Base64
+import com.zanuaimi.unimanager.data.model.RefreshSettings
 import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
@@ -18,7 +19,7 @@ object InstalledAppScanner {
     const val KEY_ENABLE_AUTO_REFRESH = "enable_auto_refresh"
     const val KEY_AUTO_REFRESH_VALUE = "auto_refresh_value"
     const val KEY_AUTO_REFRESH_UNIT = "auto_refresh_unit"
-    const val MIN_REFRESH_COOLDOWN_SECONDS = 30L
+    const val MIN_REFRESH_COOLDOWN_SECONDS = RefreshSettings.MIN_COOLDOWN_SECONDS
 
     /** Avoids repeating the package-manager scan during rapid Activity resumes. */
     fun scanIfNeeded(context: Context): Int {
@@ -29,7 +30,7 @@ object InstalledAppScanner {
         val elapsedSeconds = (now - preferences.getLong(LAST_SCAN_KEY, 0L)) / 1000L
         if (elapsedSeconds < cooldownSeconds(settings)) return 0
         val imported = scan(context, preferences)
-        preferences.edit().putLong(LAST_SCAN_KEY, now).commit()
+        preferences.edit().putLong(LAST_SCAN_KEY, now).apply()
         return imported
     }
 
@@ -44,6 +45,29 @@ object InstalledAppScanner {
         return scan(context, preferences)
     }
 
+    /** Returns validated UniManager registration metadata for a selected installed app. */
+    fun registrationFor(context: Context, application: ApplicationInfo): JSONObject? {
+        val encoded = application.metaData?.getString(METADATA_NAME).orEmpty()
+        val registration = decode(encoded) ?: return null
+        val packageManager = context.packageManager
+        registration.put("package_name", application.packageName)
+        registration.put(
+            "app_label",
+            registration.optString("app_label").ifBlank {
+                application.loadLabel(packageManager).toString()
+            },
+        )
+        registration.put(
+            "version_name",
+            registration.optString("version_name").ifBlank {
+                runCatching {
+                    packageManager.getPackageInfo(application.packageName, 0).versionName.orEmpty()
+                }.getOrDefault("")
+            },
+        )
+        return registration
+    }
+
     private fun scan(context: Context, preferences: android.content.SharedPreferences): Int {
         val packageManager = context.packageManager
         val registry = AppRegistry(context)
@@ -56,20 +80,7 @@ object InstalledAppScanner {
             val fingerprint = fingerprint(application, encoded)
             val cachedFingerprint = preferences.getString("fingerprint_$packageName", null)
             if (cachedFingerprint == fingerprint && registry.get(packageName) != null) return@forEach
-            val registration = decode(encoded) ?: return@forEach
-            registration.put("package_name", packageName)
-            registration.put(
-                "app_label",
-                registration.optString("app_label").ifBlank {
-                    application.loadLabel(packageManager).toString()
-                },
-            )
-            registration.put(
-                "version_name",
-                registration.optString("version_name").ifBlank {
-                    runCatching { packageManager.getPackageInfo(packageName, 0).versionName.orEmpty() }.getOrDefault("")
-                },
-            )
+            val registration = registrationFor(context, application) ?: return@forEach
             val result = runCatching { JSONObject(registry.register(registration.toString())) }.getOrNull()
             if (result?.optString("status") != "registration_failed") {
                 preferences.edit().putString("fingerprint_$packageName", fingerprint).apply()
@@ -80,14 +91,10 @@ object InstalledAppScanner {
     }
 
     private fun cooldownSeconds(settings: android.content.SharedPreferences): Long {
-        val value = settings.getLong(KEY_AUTO_REFRESH_VALUE, 10L).coerceAtLeast(MIN_REFRESH_COOLDOWN_SECONDS)
-        val multiplier = when (settings.getString(KEY_AUTO_REFRESH_UNIT, "m")) {
-            "s" -> 1L
-            "h" -> 60L * 60L
-            "d" -> 24L * 60L * 60L
-            else -> 60L
-        }
-        return if (value > Long.MAX_VALUE / multiplier) Long.MAX_VALUE else value * multiplier
+        return RefreshSettings(
+            cooldownValue = settings.getLong(KEY_AUTO_REFRESH_VALUE, 10L),
+            cooldownUnit = settings.getString(KEY_AUTO_REFRESH_UNIT, "m") ?: "m",
+        ).cooldownSeconds()
     }
 
     private fun fingerprint(application: ApplicationInfo, encoded: String): String {

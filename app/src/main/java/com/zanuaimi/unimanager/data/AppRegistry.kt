@@ -50,7 +50,11 @@ class AppRegistry(context: Context) {
     @Synchronized
     fun read(payload: String): String {
         val packageName = canonicalPackageName(parse(payload)?.optString("package_name").orEmpty())
-        return configuration(parse(preferences.getString(packageName, null)) ?: JSONObject())
+        val stored = parse(preferences.getString(packageName, null)) ?: return "{}"
+        // An app with a newer protocol or unsupported capability must use its embedded
+        // defaults. Returning manager values here would make an incompatible bridge look valid.
+        if (status(stored).kind != StatusKind.READY) return "{}"
+        return configuration(stored)
     }
 
     @Synchronized
@@ -59,6 +63,7 @@ class AppRegistry(context: Context) {
         val packageName = canonicalPackageName(incoming.optString("package_name"))
         if (packageName.isBlank()) return "{}"
         val current = parse(preferences.getString(packageName, null)) ?: return "{}"
+        if (status(current).kind != StatusKind.READY) return "{}"
         val incomingConfiguration = incoming.optJSONObject("configuration") ?: return configuration(current)
         val merged = JSONObject(current.toString())
         val configuration = JSONObject(merged.optJSONObject("configuration")?.toString() ?: "{}")

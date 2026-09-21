@@ -1,0 +1,4 @@
+<resources>
+    <item name="tag_nav_label" type="id" />
+    <item name="tag_nav_icon" type="id" />
+</resources>
