@@ -482,7 +482,7 @@ class MainActivity : Activity() {
             background = UiKit.rounded(UiKit.surface, 22, UiKit.outline)
         }
         identity.addView(ImageView(this).apply {
-            setImageResource(R.drawable.ic_launcher)
+            setImageResource(R.mipmap.ic_launcher)
             scaleType = ImageView.ScaleType.CENTER_INSIDE
             contentDescription = "UniManager app logo"
             background = UiKit.rounded(android.graphics.Color.TRANSPARENT, dp(22), UiKit.outline)
@@ -662,6 +662,6 @@ class MainActivity : Activity() {
         packageManager.getApplicationIcon(packageName)
     }.getOrElse { getDrawable(android.R.drawable.sym_def_app_icon)!! }
 
-    private fun dp(value: Int): Int = UiKit.run { this@MainActivity.dp(value) }
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
 }

@@ -47,6 +47,26 @@ jobs:
           @semantic-release/release-notes-generator
           @semantic-release/github
 
+      - name: Determine semantic release version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          release_output="$(npx semantic-release --dry-run 2>&1)"
+          release_status=$?
+          set -e
+          printf '%s\n' "$release_output"
+          release_version="$(printf '%s\n' "$release_output" | sed -nE 's/.*next release version is ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | tail -n 1)"
+          if [ -z "$release_version" ]; then
+            release_version="0.1.0"
+          fi
+          test -n "$release_version" || {
+            echo "Could not determine UniManager version" >&2
+            exit 1
+          }
+          echo "UNIMANAGER_VERSION=$release_version" >> "$GITHUB_ENV"
+          echo "Using UniManager version $release_version (semantic-release dry-run status: $release_status)"
+
       - name: Prepare release keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.UNIMANAGER_KEYSTORE_BASE64 }}
