@@ -1,9 +1,10 @@
 <resources>
-    <style name="Theme.UniManager" parent="android:style/Theme.Material.Light.NoActionBar">
+    <style name="Theme.UniManager" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <item name="android:colorAccent">#6750A4</item>
-        <item name="android:navigationBarColor">#FAF8FF</item>
-        <item name="android:statusBarColor">#FAF8FF</item>
-        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:colorAccent">#FF5656</item>
+        <item name="android:windowBackground">#210000</item>
+        <item name="android:navigationBarColor">#210000</item>
+        <item name="android:statusBarColor">#210000</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>

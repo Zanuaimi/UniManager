@@ -80,11 +80,14 @@ jobs:
           UNIMANAGER_KEY_ALIAS: ${{ secrets.UNIMANAGER_KEY_ALIAS }}
           UNIMANAGER_KEY_PASSWORD: ${{ secrets.UNIMANAGER_KEY_PASSWORD }}
 
+      - name: Name release APK
+        run: cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/UniManager.apk
+
       - name: Upload APK workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: UniManager-apk
-          path: app/build/outputs/apk/release/app-release.apk
+          path: app/build/outputs/apk/release/UniManager.apk
           if-no-files-found: error
 
       - name: Run semantic-release
@@ -100,5 +103,5 @@ jobs:
         run: >-
           gh release upload
           "${{ steps.release.outputs.new_release_git_tag }}"
-          app/build/outputs/apk/release/app-release.apk
+          app/build/outputs/apk/release/UniManager.apk
           --clobber

@@ -19,6 +19,10 @@ android {
         versionName = "0.1.0"
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     val releaseSigningConfig = if (
         !releaseKeystoreFile.isNullOrBlank() &&
         !releaseKeystorePassword.isNullOrBlank() &&

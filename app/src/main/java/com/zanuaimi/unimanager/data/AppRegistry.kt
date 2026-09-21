@@ -22,8 +22,9 @@ class AppRegistry(context: Context) {
     @Synchronized
     fun register(payload: String): String {
         val incoming = parse(payload) ?: return "{}"
-        val packageName = incoming.optString("package_name")
+        val packageName = canonicalPackageName(incoming.optString("package_name"))
         if (packageName.isBlank()) return "{}"
+        incoming.put("package_name", packageName)
         val current = parse(preferences.getString(packageName, null)) ?: JSONObject()
         val merged = JSONObject(current.toString())
         val keys = incoming.keys()
@@ -31,50 +32,89 @@ class AppRegistry(context: Context) {
             val key = keys.next()
             if (key == "configuration" && incoming.optJSONObject(key) != null) {
                 val configuration = JSONObject(merged.optJSONObject(key)?.toString() ?: "{}")
-                merge(configuration, incoming.optJSONObject(key)!!)
+                mergeMissing(configuration, incoming.optJSONObject(key)!!)
                 merged.put(key, configuration)
             } else {
                 merged.put(key, incoming.get(key))
             }
         }
         merged.put("manager_last_seen_at", System.currentTimeMillis())
-        preferences.edit().putString(packageName, merged.toString()).apply()
+        // Registration is a patch-install/update event. Commit it before replying so
+        // a manager or host process crash cannot acknowledge an unpersisted record.
+        if (!preferences.edit().putString(packageName, merged.toString()).commit()) {
+            return "{\"status\":\"registration_failed\"}"
+        }
         return configuration(merged)
     }
 
     @Synchronized
     fun read(payload: String): String {
-        val packageName = parse(payload)?.optString("package_name").orEmpty()
+        val packageName = canonicalPackageName(parse(payload)?.optString("package_name").orEmpty())
         return configuration(parse(preferences.getString(packageName, null)) ?: JSONObject())
     }
 
     @Synchronized
     fun update(payload: String): String {
-        return register(payload)
+        val incoming = parse(payload) ?: return "{}"
+        val packageName = canonicalPackageName(incoming.optString("package_name"))
+        if (packageName.isBlank()) return "{}"
+        val current = parse(preferences.getString(packageName, null)) ?: return "{}"
+        val incomingConfiguration = incoming.optJSONObject("configuration") ?: return configuration(current)
+        val merged = JSONObject(current.toString())
+        val configuration = JSONObject(merged.optJSONObject("configuration")?.toString() ?: "{}")
+        // Runtime updates are authoritative for the keys they provide. Patch registration uses
+        // mergeMissing separately so a repatch does not erase manager-owned values.
+        merge(configuration, incomingConfiguration)
+        merged.put("configuration", configuration)
+        merged.put("manager_last_updated_at", System.currentTimeMillis())
+        if (!preferences.edit().putString(packageName, merged.toString()).commit()) return "{}"
+        return configuration(merged)
     }
 
     /** Updates only manager-owned configuration keys and keeps unknown patch data intact. */
     @Synchronized
     fun updateConfiguration(packageName: String, values: JSONObject): Boolean {
-        if (packageName.isBlank()) return false
-        val current = parse(preferences.getString(packageName, null)) ?: return false
+        val canonicalName = canonicalPackageName(packageName)
+        if (canonicalName.isBlank()) return false
+        val current = parse(preferences.getString(canonicalName, null)) ?: return false
         val configuration = JSONObject(current.optJSONObject("configuration")?.toString() ?: "{}")
         merge(configuration, values)
         current.put("configuration", configuration)
         current.put("manager_last_updated_at", System.currentTimeMillis())
-        preferences.edit().putString(packageName, current.toString()).apply()
-        return true
+        return preferences.edit().putString(canonicalName, current.toString()).commit()
     }
 
-    fun get(packageName: String): JSONObject? =
-        parse(preferences.getString(packageName, null))?.let { JSONObject(it.toString()) }
+    @Synchronized
+    fun remove(packageName: String): Boolean {
+        val canonicalName = canonicalPackageName(packageName)
+        if (canonicalName.isBlank()) return false
+        return preferences.edit().remove(canonicalName).commit()
+    }
+
+    fun get(packageName: String): JSONObject? {
+        val canonicalName = canonicalPackageName(packageName)
+        return parse(preferences.getString(canonicalName, null))?.let { JSONObject(it.toString()) }
+    }
 
     fun configuration(packageName: String): JSONObject =
         get(packageName)?.optJSONObject("configuration")?.let { JSONObject(it.toString()) } ?: JSONObject()
 
-    fun all(): List<JSONObject> = preferences.all.values.mapNotNull { value ->
-        parse(value as? String)
-    }.sortedBy { it.optString("app_label").lowercase() }
+    @Synchronized
+    fun all(): List<JSONObject> {
+        val uniqueApps = linkedMapOf<String, JSONObject>()
+        preferences.all.values.mapNotNull { value -> parse(value as? String) }.forEach { app ->
+            val packageName = canonicalPackageName(app.optString("package_name"))
+            if (packageName.isBlank()) return@forEach
+            app.put("package_name", packageName)
+            // Package name is the identity. If older data contains duplicates,
+            // keep the most recently registered record for that package.
+            val previous = uniqueApps[packageName]
+            if (previous == null || app.optLong("manager_last_seen_at") >= previous.optLong("manager_last_seen_at")) {
+                uniqueApps[packageName] = app
+            }
+        }
+        return uniqueApps.values.sortedBy { it.optString("app_label").lowercase() }
+    }
 
     fun hasCapability(app: JSONObject, capability: String): Boolean {
         val capabilities = app.optJSONArray("capabilities") ?: return false
@@ -153,6 +193,14 @@ class AppRegistry(context: Context) {
         }
     }
 
+    private fun mergeMissing(target: JSONObject, source: JSONObject) {
+        val keys = source.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            if (!target.has(key)) target.put(key, source.get(key))
+        }
+    }
+
     private fun configuration(app: JSONObject): String {
         val result = JSONObject()
         val config = app.optJSONObject("configuration") ?: return result.toString()
@@ -167,6 +215,8 @@ class AppRegistry(context: Context) {
     private fun parse(value: String?): JSONObject? = runCatching {
         value?.takeIf { it.isNotBlank() }?.let(::JSONObject)
     }.getOrNull()
+
+    private fun canonicalPackageName(value: String): String = value.trim()
 
     enum class StatusKind { READY, UNSUPPORTED, REPATCH_REQUIRED }
 
