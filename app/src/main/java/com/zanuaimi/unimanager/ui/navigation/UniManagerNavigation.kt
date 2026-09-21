@@ -102,7 +102,6 @@ import com.zanuaimi.unimanager.ui.components.ExpandableCard
 import com.zanuaimi.unimanager.ui.components.LoadingOrMessage
 import com.zanuaimi.unimanager.ui.components.NoticeCard
 import com.zanuaimi.unimanager.ui.components.ScreenHeader
-import com.zanuaimi.unimanager.ui.theme.UniManagerTheme
 import com.zanuaimi.unimanager.viewmodel.AboutViewModel
 import com.zanuaimi.unimanager.viewmodel.AppDetailsViewModel
 import com.zanuaimi.unimanager.viewmodel.AppDetailsViewModelFactory
@@ -133,12 +132,12 @@ fun UniManagerNavigation(navController: NavHostController = rememberNavControlle
     val mainRoute = routeName?.substringBefore('/')
     val showBottomBar = mainRoute in setOf(APPS, BACKUPS, SETTINGS, ABOUT)
     Scaffold(
-        containerColor = UniManagerTheme.palette.background,
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             if (showBottomBar) {
                 Box(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
                     Surface(
-                        color = UniManagerTheme.palette.surface,
+                        color = MaterialTheme.colorScheme.surface,
                         shape = RoundedCornerShape(30.dp),
                         shadowElevation = 12.dp,
                         tonalElevation = 4.dp,
@@ -153,8 +152,8 @@ fun UniManagerNavigation(navController: NavHostController = rememberNavControlle
                         val selected = mainRoute == route
                         Surface(
                             onClick = { navController.navigate(route) { popUpTo(APPS); launchSingleTop = true } },
-                            color = if (selected) UniManagerTheme.palette.accentDark else Color.Transparent,
-                            contentColor = Color.White,
+                            color = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                            contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
                             shape = CircleShape,
                             modifier = Modifier.animateContentSize(),
                         ) {
@@ -279,18 +278,19 @@ private fun AppsScreen(navController: NavHostController, viewModel: AppsViewMode
         }
         FloatingActionButton(
             onClick = { navController.navigate("picker") },
-            containerColor = UniManagerTheme.palette.accentDark,
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
             modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
         ) { Text("+", fontSize = 24.sp) }
         if (pullDistance > 0f || refreshing) {
             Box(Modifier.align(Alignment.TopCenter).padding(top = 10.dp)) {
                 if (refreshing) {
-                    CircularProgressIndicator(Modifier.size(34.dp), color = UniManagerTheme.palette.accent, strokeWidth = 3.dp)
+                    CircularProgressIndicator(Modifier.size(34.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 3.dp)
                 } else {
                     Box(
                         Modifier.size(34.dp)
                             .alpha((pullDistance / 100f).coerceIn(0f, 1f))
-                            .background(UniManagerTheme.palette.accentDark, androidx.compose.foundation.shape.CircleShape),
+                            .background(MaterialTheme.colorScheme.primaryContainer, androidx.compose.foundation.shape.CircleShape),
                     )
                 }
             }
@@ -312,7 +312,7 @@ private fun RegisteredAppCard(app: RegisteredApp, navController: NavHostControll
     val context = LocalContext.current
     val drawable = remember(app.packageName) { AppIconRepository(context).load(app.packageName) }
     Card(
-        colors = CardDefaults.cardColors(containerColor = UniManagerTheme.palette.surface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
     ) {
         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -382,7 +382,7 @@ private fun FilterButton(current: AppVisibility, onChange: (AppVisibility) -> Un
 private fun InstalledAppCard(app: InstalledApp, onClick: () -> Unit) {
     val context = LocalContext.current
     val drawable = remember(app.info.packageName) { AppIconRepository(context).load(app.info.packageName) }
-    Card(onClick = onClick, colors = CardDefaults.cardColors(containerColor = UniManagerTheme.palette.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+    Card(onClick = onClick, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             AppIcon(drawable, "${app.label} icon", Modifier.size(56.dp))
             Column(Modifier.padding(start = 14.dp)) {
@@ -398,6 +398,7 @@ private fun InstalledAppCard(app: InstalledApp, onClick: () -> Unit) {
 private fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     val settings by viewModel.state.collectAsStateWithLifecycle()
     val appearance by viewModel.appearance.collectAsStateWithLifecycle()
+    val dynamicColorAvailable by viewModel.dynamicColorAvailable.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     var value by remember(settings.cooldownValue) { mutableStateOf(settings.cooldownValue.toString()) }
     var unitMenu by remember { mutableStateOf(false) }
@@ -405,6 +406,11 @@ private fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     var accentMenu by remember { mutableStateOf(false) }
     var customAccent by remember(appearance.customAccent) { mutableStateOf(appearance.customAccent) }
     val accentChoices = listOf("Red" to "#FF5656", "Blue" to "#5599FF", "Yellow" to "#FFCC33", "Green" to "#55CC88", "Black" to "#111111", "Aqua" to "#33CCCC")
+    val colorSetChoices = buildList {
+        add("unipatches" to "UniPatches colorset")
+        if (dynamicColorAvailable) add("dynamic" to "Dynamic Color")
+        add("custom" to "Custom Accent Color")
+    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
         ScreenHeader("Settings")
         Spacer(Modifier.height(12.dp))
@@ -415,7 +421,7 @@ private fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     Text(when (appearance.colorSet) { "dynamic" -> "Dynamic Color"; "custom" -> "Custom Accent Color"; else -> "UniPatches colorset" })
                 }
                 DropdownMenu(expanded = colorSetMenu, onDismissRequest = { colorSetMenu = false }) {
-                    listOf("unipatches" to "UniPatches colorset", "dynamic" to "Dynamic Color", "custom" to "Custom Accent Color").forEach { (key, label) ->
+                    colorSetChoices.forEach { (key, label) ->
                         DropdownMenuItem(text = { Text(label) }, onClick = { colorSetMenu = false; viewModel.updateAppearance(appearance.copy(colorSet = key)) })
                     }
                 }
@@ -478,7 +484,7 @@ private fun AboutScreen(viewModel: AboutViewModel = viewModel()) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         ScreenHeader("About")
         Spacer(Modifier.height(12.dp))
-        Card(colors = CardDefaults.cardColors(containerColor = UniManagerTheme.palette.surface), modifier = Modifier.fillMaxWidth()) {
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 AppIcon(context.getDrawable(R.mipmap.ic_launcher), "UniManager app logo", Modifier.size(92.dp))
                 Text(context.getString(R.string.app_name), fontWeight = FontWeight.Bold, fontSize = 22.sp)
@@ -488,7 +494,7 @@ private fun AboutScreen(viewModel: AboutViewModel = viewModel()) {
             }
         }
         Spacer(Modifier.height(12.dp))
-        Card(colors = CardDefaults.cardColors(containerColor = UniManagerTheme.palette.surface), modifier = Modifier.fillMaxWidth()) {
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(18.dp)) {
                 Text("Updates", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 Text(state.message, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))

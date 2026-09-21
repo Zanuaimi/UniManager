@@ -35,7 +35,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.zanuaimi.unimanager.ui.theme.UniManagerTheme
 
 @Composable
 fun AppIcon(drawable: Drawable?, contentDescription: String, modifier: Modifier = Modifier) {
@@ -56,7 +55,7 @@ fun ScreenHeader(title: String, onBack: (() -> Unit)? = null) {
 
 @Composable
 fun NoticeCard(title: String, message: String) {
-    Card(colors = CardDefaults.cardColors(containerColor = UniManagerTheme.palette.surface), modifier = Modifier.fillMaxWidth()) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(18.dp)) {
             Text(title, fontWeight = FontWeight.Bold, fontSize = 17.sp)
             Spacer(Modifier.height(6.dp))
@@ -69,7 +68,7 @@ fun NoticeCard(title: String, message: String) {
 fun ExpandableCard(title: String, initiallyExpanded: Boolean = true, content: @Composable () -> Unit) {
     var expanded by remember { mutableStateOf(initiallyExpanded) }
     Card(
-        colors = CardDefaults.cardColors(containerColor = UniManagerTheme.palette.surface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         modifier = Modifier.fillMaxWidth().animateContentSize(),
     ) {
         Column {

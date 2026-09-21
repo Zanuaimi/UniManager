@@ -149,8 +149,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val message: StateFlow<String?> = _message.asStateFlow()
     private val _appearance = MutableStateFlow(AppearanceSettings())
     val appearance: StateFlow<AppearanceSettings> = _appearance.asStateFlow()
+    private val _dynamicColorAvailable = MutableStateFlow(repository.hasDynamicColorData())
+    val dynamicColorAvailable: StateFlow<Boolean> = _dynamicColorAvailable.asStateFlow()
 
-    init { viewModelScope.launch { _state.value = repository.read(); _appearance.value = repository.readAppearance() } }
+    init { viewModelScope.launch { _state.value = repository.read(); _appearance.value = repository.readInitialAppearance() } }
 
     fun update(settings: RefreshSettings) {
         if (settings.cooldownValue <= 0 || settings.rawCooldownSeconds() < InstalledAppScanner.MIN_REFRESH_COOLDOWN_SECONDS) {

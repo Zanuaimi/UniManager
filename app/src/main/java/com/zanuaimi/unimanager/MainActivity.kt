@@ -9,19 +9,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.LaunchedEffect
 import com.zanuaimi.unimanager.data.repository.SettingsRepository
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import com.zanuaimi.unimanager.ui.navigation.UniManagerNavigation
 import com.zanuaimi.unimanager.ui.theme.UniManagerTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = UiKit.background
-        window.navigationBarColor = UiKit.background
         setContent {
             LaunchedEffect(Unit) {
-                UniManagerTheme.setAppearance(withContext(Dispatchers.IO) { SettingsRepository(applicationContext).readAppearance() })
+                UniManagerTheme.setAppearance(SettingsRepository(applicationContext).readInitialAppearance())
             }
             UniManagerTheme {
                 UniManagerNavigation()
