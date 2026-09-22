@@ -5,6 +5,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.util.Base64
 import com.zanuaimi.unimanager.data.model.RefreshSettings
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
@@ -12,6 +13,7 @@ import java.security.MessageDigest
 /** Imports UniPatches registrations embedded in installed APK manifests. */
 object InstalledAppScanner {
     private const val METADATA_NAME = "com.zanuaimi.unimanager.REGISTRATION"
+    private const val METADATA_PREFIX = "$METADATA_NAME."
     private const val CACHE_NAME = "installed_app_scan"
     private const val LAST_SCAN_KEY = "last_scan_at"
     const val SETTINGS_NAME = "uni_manager_settings"
@@ -49,8 +51,7 @@ object InstalledAppScanner {
 
     /** Returns validated UniManager registration metadata for a selected installed app. */
     fun registrationFor(context: Context, application: ApplicationInfo): JSONObject? {
-        val encoded = application.metaData?.getString(METADATA_NAME).orEmpty()
-        val registration = decode(encoded) ?: return null
+        val registration = decodeRegistrations(application) ?: return null
         val packageManager = context.packageManager
         registration.put("package_name", application.packageName)
         registration.put(
@@ -76,7 +77,7 @@ object InstalledAppScanner {
         val applications = packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
         var imported = 0
         applications.forEach { application ->
-            val encoded = application.metaData?.getString(METADATA_NAME).orEmpty()
+            val encoded = metadataFingerprintValue(application)
             if (encoded.isBlank()) return@forEach
             val packageName = application.packageName
             val fingerprint = fingerprint(application, encoded)
@@ -107,6 +108,81 @@ object InstalledAppScanner {
         val input = "${application.packageName}|$sourceTimestamp|$encoded"
         val digest = MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8))
         return digest.joinToString("") { byte -> "%02x".format(byte) }
+    }
+
+    private fun decodeRegistrations(application: ApplicationInfo): JSONObject? {
+        val metadata = application.metaData ?: return null
+        val registrations = metadata.keySet()
+            .asSequence()
+            .filter { key -> key == METADATA_NAME || key.startsWith(METADATA_PREFIX) }
+            .sorted()
+            .mapNotNull { key -> decode(metadata.getString(key).orEmpty()) }
+            .toList()
+        if (registrations.isEmpty()) return null
+
+        val merged = JSONObject(registrations.first().toString())
+        registrations.drop(1).forEach { incoming ->
+            mergeRegistration(merged, incoming)
+        }
+        return merged
+    }
+
+    private fun metadataFingerprintValue(application: ApplicationInfo): String {
+        val metadata = application.metaData ?: return ""
+        return metadata.keySet()
+            .asSequence()
+            .filter { key -> key == METADATA_NAME || key.startsWith(METADATA_PREFIX) }
+            .sorted()
+            .map { key -> "$key=${metadata.getString(key).orEmpty()}" }
+            .joinToString("\u0000")
+    }
+
+    private fun mergeRegistration(target: JSONObject, incoming: JSONObject) {
+        val targetPatches = target.optJSONArray("patches") ?: JSONArray().also { target.put("patches", it) }
+        val incomingPatches = incoming.optJSONArray("patches")
+        if (incomingPatches != null) {
+            for (index in 0 until incomingPatches.length()) {
+                val candidate = incomingPatches.optJSONObject(index) ?: continue
+                val candidateId = candidate.optString("id")
+                if (candidateId.isBlank()) continue
+                var existingIndex = -1
+                for (patchIndex in 0 until targetPatches.length()) {
+                    if (targetPatches.optJSONObject(patchIndex)?.optString("id") == candidateId) {
+                        existingIndex = patchIndex
+                        break
+                    }
+                }
+                if (existingIndex >= 0) targetPatches.put(existingIndex, candidate) else targetPatches.put(candidate)
+            }
+        }
+
+        val targetCapabilities = target.optJSONArray("capabilities") ?: JSONArray().also { target.put("capabilities", it) }
+        val incomingCapabilities = incoming.optJSONArray("capabilities")
+        if (incomingCapabilities != null) {
+            for (index in 0 until incomingCapabilities.length()) {
+                val capability = incomingCapabilities.optString(index)
+                if (capability.isBlank()) continue
+                var alreadyPresent = false
+                for (capabilityIndex in 0 until targetCapabilities.length()) {
+                    if (targetCapabilities.optString(capabilityIndex) == capability) {
+                        alreadyPresent = true
+                        break
+                    }
+                }
+                if (!alreadyPresent) targetCapabilities.put(capability)
+            }
+        }
+
+        val targetConfiguration = target.optJSONObject("configuration") ?: JSONObject().also { target.put("configuration", it) }
+        incoming.optJSONObject("configuration")?.let { incomingConfiguration ->
+            val keys = incomingConfiguration.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                targetConfiguration.put(key, incomingConfiguration.get(key))
+            }
+        }
+        if (incoming.has("protocol_version")) target.put("protocol_version", incoming.optInt("protocol_version"))
+        if (incoming.has("source_version")) target.put("source_version", incoming.optString("source_version"))
     }
 
     private fun decode(encoded: String): JSONObject? = runCatching {
