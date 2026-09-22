@@ -13,7 +13,11 @@ class UpdateFileProvider : ContentProvider() {
     override fun onCreate(): Boolean = true
 
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
-        require(mode == "r") { "Update APK provider is read-only" }
+        // Installers may request a compatible read mode such as "rt". Never
+        // allow write or append access, but accept all read-only variants.
+        require(mode.startsWith("r") && !mode.contains('w') && !mode.contains('a')) {
+            "Update APK provider is read-only"
+        }
         val file = File(requireNotNull(context).cacheDir, "updates/${uri.lastPathSegment}").canonicalFile
         val root = File(requireNotNull(context).cacheDir, "updates").canonicalFile
         require(file.path.startsWith(root.path + File.separator) && file.isFile) { "Unknown update file" }

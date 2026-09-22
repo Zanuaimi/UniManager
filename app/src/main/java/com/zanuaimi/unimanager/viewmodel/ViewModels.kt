@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 
 class MainViewModel : ViewModel()
@@ -176,6 +177,8 @@ data class AboutUiState(
     val checking: Boolean = false,
     val downloading: Boolean = false,
     val message: String = "Checking for updates...",
+    val updateAvailable: Boolean = false,
+    val timeoutEvent: Long = 0L,
 )
 
 class AboutViewModel(application: Application) : AndroidViewModel(application) {
@@ -188,14 +191,26 @@ class AboutViewModel(application: Application) : AndroidViewModel(application) {
     fun checkForUpdates() {
         viewModelScope.launch {
             _state.update { it.copy(checking = true, message = "Checking for updates...") }
-            val release = runCatching { repository.latest() }.getOrNull()
+            val result = withTimeoutOrNull(30_000L) {
+                runCatching { repository.latest() }
+            }
+            if (result == null) {
+                _state.value = AboutUiState(
+                    message = "Update check timed out. Please try again.",
+                    timeoutEvent = System.currentTimeMillis(),
+                )
+                return@launch
+            }
+            val release = result.getOrNull()
+            val updateAvailable = release?.apkUrl?.isNotBlank() == true &&
+                repository.compareVersions(release.version, com.zanuaimi.unimanager.BuildConfig.VERSION_NAME) > 0
             val status = when {
                 release == null -> "Unable to check for updates right now."
                 release.apkUrl.isNullOrBlank() -> "No installable update is available."
-                repository.compareVersions(release.version, com.zanuaimi.unimanager.BuildConfig.VERSION_NAME) > 0 -> "Update available: version ${release.version}"
+                updateAvailable -> "Update v${release.version} is available!"
                 else -> "You are up to date."
             }
-            _state.value = AboutUiState(release, false, false, status)
+            _state.value = AboutUiState(release, false, false, status, updateAvailable)
         }
     }
 

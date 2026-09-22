@@ -31,7 +31,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -41,7 +43,9 @@ fun AppIcon(drawable: Drawable?, contentDescription: String, modifier: Modifier 
     AndroidView(
         factory = { ImageView(it).apply { scaleType = ImageView.ScaleType.CENTER_INSIDE } },
         update = { it.setImageDrawable(drawable) },
-        modifier = modifier,
+        // Android application icons are commonly delivered as square bitmaps.
+        // Clip them consistently so list cards match the platform's squircle style.
+        modifier = modifier.clip(RoundedCornerShape(percent = 24)),
     )
 }
 

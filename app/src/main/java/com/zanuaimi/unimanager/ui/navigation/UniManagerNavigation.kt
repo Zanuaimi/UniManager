@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandHorizontally
@@ -17,6 +18,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,6 +27,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -37,10 +40,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SystemUpdateAlt
 import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -48,6 +54,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -56,6 +63,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Slider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
@@ -73,6 +81,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.shape.CircleShape
@@ -319,13 +328,11 @@ private fun RegisteredAppCard(app: RegisteredApp, navController: NavHostControll
             AppIcon(drawable, "${app.label} icon", Modifier.size(54.dp))
             Column(Modifier.weight(1f).padding(start = 14.dp)) {
                 Text(app.label, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                Row(Modifier.fillMaxWidth()) {
-                    Text(app.packageName, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                    Text(app.version, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-                }
+                Text(app.packageName, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                Text("v${app.version.ifBlank { "unknown" }}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
             }
             IconButton(onClick = { navController.navigate("details/${Uri.encode(app.packageName)}") }) { Icon(Icons.Default.Settings, "Configure ${app.label}") }
-            IconButton(onClick = onDelete) { Icon(Icons.Default.Build, "Remove ${app.label}") }
+            IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, "Remove ${app.label}") }
         }
     }
 }
@@ -372,10 +379,36 @@ private fun FilterButton(current: AppVisibility, onChange: (AppVisibility) -> Un
     var expanded by remember { mutableStateOf(false) }
     Box {
         OutlinedButton(onClick = { expanded = true }) { Text(current.name.lowercase().replaceFirstChar(Char::uppercase)) }
-        DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
-            AppVisibility.entries.forEach { option -> DropdownMenuItem(text = { Text(option.name) }, onClick = { expanded = false; onChange(option) }) }
+        ThemedDropdownMenu(expanded, onDismissRequest = { expanded = false }) {
+            AppVisibility.entries.forEachIndexed { index, option ->
+                if (index > 0) ThemedDropdownDivider()
+                DropdownMenuItem(text = { Text(option.name.lowercase().replaceFirstChar(Char::uppercase)) }, onClick = { expanded = false; onChange(option) })
+            }
         }
     }
+}
+
+@Composable
+private fun ThemedDropdownMenu(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
+        shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.8f)),
+        tonalElevation = 4.dp,
+        shadowElevation = 8.dp,
+        content = content,
+    )
+}
+
+@Composable
+private fun ThemedDropdownDivider() {
+    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f), thickness = 1.dp)
 }
 
 @Composable
@@ -420,8 +453,9 @@ private fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                 OutlinedButton(onClick = { colorSetMenu = true }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
                     Text(when (appearance.colorSet) { "dynamic" -> "Dynamic Color"; "custom" -> "Custom Accent Color"; else -> "UniPatches colorset" })
                 }
-                DropdownMenu(expanded = colorSetMenu, onDismissRequest = { colorSetMenu = false }) {
-                    colorSetChoices.forEach { (key, label) ->
+                ThemedDropdownMenu(expanded = colorSetMenu, onDismissRequest = { colorSetMenu = false }) {
+                    colorSetChoices.forEachIndexed { index, (key, label) ->
+                        if (index > 0) ThemedDropdownDivider()
                         DropdownMenuItem(text = { Text(label) }, onClick = { colorSetMenu = false; viewModel.updateAppearance(appearance.copy(colorSet = key)) })
                     }
                 }
@@ -432,14 +466,16 @@ private fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     OutlinedButton(onClick = { accentMenu = true }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
                         Text(accentChoices.firstOrNull { it.second.equals(customAccent, true) }?.first ?: "Custom color")
                     }
-                    DropdownMenu(expanded = accentMenu, onDismissRequest = { accentMenu = false }) {
-                        accentChoices.forEach { (label, color) ->
+                    ThemedDropdownMenu(expanded = accentMenu, onDismissRequest = { accentMenu = false }) {
+                        accentChoices.forEachIndexed { index, (label, color) ->
+                            if (index > 0) ThemedDropdownDivider()
                             DropdownMenuItem(text = { Text(label) }, onClick = {
                                 accentMenu = false
                                 customAccent = color
                                 viewModel.updateAppearance(appearance.copy(colorSet = "custom", customAccent = color))
                             })
                         }
+                        ThemedDropdownDivider()
                         DropdownMenuItem(text = { Text("Custom color editor") }, onClick = { accentMenu = false })
                     }
                 }
@@ -460,7 +496,12 @@ private fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                 Spacer(Modifier.size(8.dp))
                 Box {
                     OutlinedButton(onClick = { unitMenu = true }) { Text(settings.cooldownUnit) }
-                    DropdownMenu(unitMenu, { unitMenu = false }) { listOf("s", "m", "h", "d").forEach { item -> DropdownMenuItem(text = { Text(item) }, onClick = { unitMenu = false; viewModel.update(settings.copy(cooldownValue = value.toLongOrNull() ?: 0, cooldownUnit = item)) }) } }
+                    ThemedDropdownMenu(unitMenu, { unitMenu = false }) {
+                        listOf("s", "m", "h", "d").forEachIndexed { index, item ->
+                            if (index > 0) ThemedDropdownDivider()
+                            DropdownMenuItem(text = { Text(item) }, onClick = { unitMenu = false; viewModel.update(settings.copy(cooldownValue = value.toLongOrNull() ?: 0, cooldownUnit = item)) })
+                        }
+                    }
                 }
             }
             Button(onClick = { viewModel.update(settings.copy(cooldownValue = value.toLongOrNull() ?: 0)) }, modifier = Modifier.padding(top = 8.dp)) { Text("Save refresh settings") }
@@ -481,12 +522,18 @@ private fun SettingSwitch(title: String, description: String, checked: Boolean, 
 private fun AboutScreen(viewModel: AboutViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val updateAvailable = state.updateAvailable && state.release?.apkUrl?.isNotBlank() == true
+    LaunchedEffect(state.timeoutEvent) {
+        if (state.timeoutEvent != 0L) {
+            Toast.makeText(context, "Update check timed out. Please try again.", Toast.LENGTH_LONG).show()
+        }
+    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         ScreenHeader("About")
         Spacer(Modifier.height(12.dp))
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                AppIcon(context.getDrawable(R.mipmap.ic_launcher), "UniManager app logo", Modifier.size(92.dp))
+                AppIcon(context.getDrawable(R.drawable.unipatches_icon_inset), "UniManager app logo", Modifier.size(92.dp))
                 Text(context.getString(R.string.app_name), fontWeight = FontWeight.Bold, fontSize = 22.sp)
                 Text("Version ${BuildConfig.VERSION_NAME}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("by Zanuaimi", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
@@ -495,11 +542,38 @@ private fun AboutScreen(viewModel: AboutViewModel = viewModel()) {
         }
         Spacer(Modifier.height(12.dp))
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(18.dp)) {
+            Column(Modifier.fillMaxWidth().padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Updates", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Text(state.message, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
-                if (state.release?.apkUrl != null && state.message.startsWith("Update available")) {
-                    Button(onClick = { viewModel.download { file -> installDownloadedApk(context, file) } }, enabled = !state.downloading, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) { Text(if (state.downloading) "Downloading..." else "Update now") }
+                Text(
+                    state.message,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                )
+                Button(
+                    onClick = {
+                        if (updateAvailable) viewModel.download { file -> installDownloadedApk(context, file) }
+                        else viewModel.checkForUpdates()
+                    },
+                    enabled = !state.checking && !state.downloading,
+                    modifier = Modifier.animateContentSize().padding(top = 12.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (state.checking || state.downloading) {
+                            CircularProgressIndicator(Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Default.SystemUpdateAlt, contentDescription = null)
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            when {
+                                state.checking -> "Checking for updates..."
+                                state.downloading -> "Downloading update..."
+                                updateAvailable -> "Download and install update"
+                                else -> "Check for updates"
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -519,11 +593,19 @@ private fun installDownloadedApk(context: Context, file: java.io.File) {
         .authority("${context.packageName}.fileprovider")
         .appendPath(file.name)
         .build()
-    context.startActivity(Intent(Intent.ACTION_VIEW).apply {
+    val installIntent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
         setDataAndType(uri, "application/vnd.android.package-archive")
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         clipData = ClipData.newRawUri("UniManager update", uri)
-    })
+        putExtra(Intent.EXTRA_TITLE, file.name)
+    }
+    try {
+        context.startActivity(installIntent)
+    } catch (_: android.content.ActivityNotFoundException) {
+        // Preserve compatibility with third-party installers that only expose
+        // a generic APK viewer instead of ACTION_INSTALL_PACKAGE.
+        context.startActivity(installIntent.apply { action = Intent.ACTION_VIEW })
+    }
 }
 
 @Composable
@@ -539,11 +621,22 @@ private fun AppDetailsScreen(packageName: String, navController: NavHostControll
         Text(packageName, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
         OutlinedTextField(query, { query = it }, label = { Text("Search settings") }, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), singleLine = true)
         val values = configuration ?: JSONObject()
-        val keys = values.keys().asSequence().toList().filter { query.isBlank() || it.contains(query, true) }
+        val keys = values.keys().asSequence().toList().filter { key ->
+            val label = ConfigurationKeyLabels.label(app?.raw, key)
+            query.isBlank() || key.contains(query, true) || label.contains(query, true)
+        }
         if (keys.isEmpty()) NoticeCard("No configurable capabilities", "This app registered successfully, but it did not report manager-editable settings.")
-        keys.groupBy { it.substringBefore('.') }.forEach { (group, groupKeys) ->
-            ExpandableCard(group.replaceFirstChar(Char::uppercase)) {
-                groupKeys.forEach { key -> ConfigurationSetting(key, values, onChange = { values.put(key, it); configuration = JSONObject(values.toString()) }, onEditList = { navController.navigate("strings/${Uri.encode(packageName)}/${Uri.encode(key)}") }) }
+        keys.groupBy { ConfigurationKeyLabels.patchName(app?.raw, it) }.forEach { (group, groupKeys) ->
+            ExpandableCard(group) {
+                groupKeys.forEach { key ->
+                    ConfigurationSetting(
+                        key,
+                        ConfigurationKeyLabels.label(app?.raw, key),
+                        values,
+                        onChange = { values.put(key, it); configuration = JSONObject(values.toString()) },
+                        onEditList = { navController.navigate("strings/${Uri.encode(packageName)}/${Uri.encode(key)}") },
+                    )
+                }
             }
             Spacer(Modifier.height(10.dp))
         }
@@ -552,9 +645,9 @@ private fun AppDetailsScreen(packageName: String, navController: NavHostControll
 }
 
 @Composable
-private fun ConfigurationSetting(key: String, configuration: JSONObject, onChange: (Any) -> Unit, onEditList: () -> Unit) {
+private fun ConfigurationSetting(key: String, label: String, configuration: JSONObject, onChange: (Any) -> Unit, onEditList: () -> Unit) {
     val value = configuration.opt(key)
-    val label = key.replace('_', ' ').replace('.', ' ').replaceFirstChar(Char::uppercase)
+    var showColorEditor by rememberSaveable(key) { mutableStateOf(false) }
     if (value is Boolean || key == "block_ads" || key == "block_hosts") {
         SettingSwitch(label, "Managed by the patch capability.", configuration.optBoolean(key), { onChange(it) })
     } else if (value is JSONArray || value is String && value.startsWith("[")) {
@@ -569,7 +662,10 @@ private fun ConfigurationSetting(key: String, configuration: JSONObject, onChang
         Column(Modifier.fillMaxWidth()) {
             if (key.contains("color", true) || configuration.optString(key).startsWith("#")) {
                 val previewColor = runCatching { Color(android.graphics.Color.parseColor(configuration.optString(key))) }.getOrDefault(MaterialTheme.colorScheme.surfaceVariant)
-                Box(Modifier.size(36.dp).background(previewColor, RoundedCornerShape(6.dp)))
+                Row(Modifier.fillMaxWidth().padding(top = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(44.dp).background(previewColor, RoundedCornerShape(8.dp)))
+                    OutlinedButton(onClick = { showColorEditor = true }, modifier = Modifier.padding(start = 10.dp)) { Text("Edit color") }
+                }
             }
             OutlinedTextField(configuration.optString(key), { onChange(it) }, label = { Text(label) }, modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp), singleLine = true)
             if (isFile) {
@@ -580,14 +676,83 @@ private fun ConfigurationSetting(key: String, configuration: JSONObject, onChang
             }
         }
     }
+    if (showColorEditor) {
+        ColorEditorDialog(
+            initialValue = configuration.optString(key),
+            onDismiss = { showColorEditor = false },
+            onApply = { color -> onChange(color); showColorEditor = false },
+        )
+    }
+}
+
+private data class RgbColor(val red: Int, val green: Int, val blue: Int) {
+    fun hex(): String = "#%02X%02X%02X".format(red, green, blue)
+}
+
+private fun parseRgb(value: String): RgbColor {
+    val color = runCatching { android.graphics.Color.parseColor(value) }.getOrDefault(android.graphics.Color.GRAY)
+    return RgbColor(android.graphics.Color.red(color), android.graphics.Color.green(color), android.graphics.Color.blue(color))
+}
+
+@Composable
+private fun ColorEditorDialog(initialValue: String, onDismiss: () -> Unit, onApply: (String) -> Unit) {
+    var rgb by remember(initialValue) { mutableStateOf(parseRgb(initialValue)) }
+    var hex by remember(initialValue) { mutableStateOf(rgb.hex()) }
+
+    fun update(next: RgbColor) {
+        rgb = next
+        hex = next.hex()
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Color editor") },
+        text = {
+            Column {
+                Box(Modifier.fillMaxWidth().height(52.dp).background(Color(rgb.red, rgb.green, rgb.blue), RoundedCornerShape(10.dp)))
+                OutlinedTextField(
+                    value = hex,
+                    onValueChange = { candidate ->
+                        hex = candidate
+                        runCatching { parseRgb(candidate) }.onSuccess { parsed -> if (candidate.matches(Regex("#[0-9A-Fa-f]{6}"))) rgb = parsed }
+                    },
+                    label = { Text("Hex color") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                )
+                RgbChannel("Red", rgb.red, { update(rgb.copy(red = it)) })
+                RgbChannel("Green", rgb.green, { update(rgb.copy(green = it)) })
+                RgbChannel("Blue", rgb.blue, { update(rgb.copy(blue = it)) })
+            }
+        },
+        confirmButton = { Button(onClick = { onApply(rgb.hex()) }) { Text("Apply") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun RgbChannel(name: String, value: Int, onValueChange: (Int) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(top = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(name, modifier = Modifier.weight(1f))
+            OutlinedTextField(
+                value = value.toString(),
+                onValueChange = { input -> input.toIntOrNull()?.let { onValueChange(it.coerceIn(0, 255)) } },
+                singleLine = true,
+                modifier = Modifier.width(78.dp),
+            )
+        }
+        Slider(value = value.toFloat(), onValueChange = { onValueChange(it.toInt()) }, valueRange = 0f..255f, steps = 254)
+    }
 }
 
 @Composable
 private fun MultiPartStringsScreen(packageName: String, key: String, navController: NavHostController, viewModel: AppDetailsViewModel = viewModel(factory = AppDetailsViewModelFactory(LocalContext.current.applicationContext as android.app.Application, packageName))) {
+    val app by viewModel.app.collectAsStateWithLifecycle()
     val storedConfiguration by viewModel.configuration.collectAsStateWithLifecycle()
     val values = remember(storedConfiguration.toString(), key) { mutableStateOf(decodeStringList(storedConfiguration.opt(key))) }
     Column(Modifier.fillMaxSize().padding(16.dp)) {
-        ScreenHeader(key.replace('_', ' ').replaceFirstChar(Char::uppercase), onBack = { navController.popBackStack() })
+        ScreenHeader(ConfigurationKeyLabels.label(app?.raw, key), onBack = { navController.popBackStack() })
         Text("Add, edit, or remove one string per icon part.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 10.dp)) {
             values.value.forEachIndexed { index, item ->

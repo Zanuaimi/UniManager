@@ -37,6 +37,7 @@ class AppRegistry(context: Context) {
             val key = keys.next()
             if (key == "configuration" && incoming.optJSONObject(key) != null) {
                 val configuration = JSONObject(merged.optJSONObject(key)?.toString() ?: "{}")
+                pruneRepatchedKeys(configuration, incoming)
                 mergeMissing(configuration, incoming.optJSONObject(key)!!)
                 merged.put(key, configuration)
             } else {
@@ -232,6 +233,23 @@ class AppRegistry(context: Context) {
             val key = keys.next()
             if (!target.has(key)) target.put(key, source.get(key))
         }
+    }
+
+    /** Removes settings for modules that were removed during a later patch operation. */
+    private fun pruneRepatchedKeys(configuration: JSONObject, incoming: JSONObject) {
+        val patchIds = incoming.optJSONArray("patches") ?: return
+        val prefixes = mutableListOf<String>()
+        for (index in 0 until patchIds.length()) {
+            when (patchIds.optJSONObject(index)?.optString("id")) {
+                "universal-overlay" -> prefixes += "runtimeOverlay"
+                "control-app-ads", "ads-block" -> prefixes += "block_"
+            }
+        }
+        if (prefixes.isEmpty()) return
+        val incomingConfiguration = incoming.optJSONObject("configuration") ?: JSONObject()
+        val keys = configuration.keys().asSequence().toList()
+        keys.filter { key -> prefixes.any { key.startsWith(it) } && !incomingConfiguration.has(key) }
+            .forEach(configuration::remove)
     }
 
     private fun configuration(app: JSONObject): String {
