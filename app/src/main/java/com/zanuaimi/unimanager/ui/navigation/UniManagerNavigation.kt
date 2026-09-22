@@ -626,21 +626,65 @@ private fun AppDetailsScreen(packageName: String, navController: NavHostControll
             query.isBlank() || key.contains(query, true) || label.contains(query, true)
         }
         if (keys.isEmpty()) NoticeCard("No configurable capabilities", "This app registered successfully, but it did not report manager-editable settings.")
-        keys.groupBy { ConfigurationKeyLabels.patchName(app?.raw, it) }.forEach { (group, groupKeys) ->
-            ExpandableCard(group) {
-                groupKeys.forEach { key ->
-                    ConfigurationSetting(
-                        key,
-                        ConfigurationKeyLabels.label(app?.raw, key),
-                        values,
-                        onChange = { values.put(key, it); configuration = JSONObject(values.toString()) },
-                        onEditList = { navController.navigate("strings/${Uri.encode(packageName)}/${Uri.encode(key)}") },
-                    )
-                }
-            }
+        buildConfigurationTree(app?.raw, keys).forEach { group ->
+            ConfigurationGroupContent(
+                group = group,
+                values = values,
+                app = app?.raw,
+                packageName = packageName,
+                navController = navController,
+                onChange = { key, value -> values.put(key, value); configuration = JSONObject(values.toString()) },
+            )
             Spacer(Modifier.height(10.dp))
         }
         Button(onClick = { viewModel.save(values) { navController.popBackStack() } }, modifier = Modifier.fillMaxWidth()) { Text("Save configuration") }
+    }
+}
+
+private class ConfigurationGroup(val title: String) {
+    val settings = mutableListOf<String>()
+    val children = linkedMapOf<String, ConfigurationGroup>()
+}
+
+private fun buildConfigurationTree(app: JSONObject?, keys: List<String>): List<ConfigurationGroup> {
+    val roots = linkedMapOf<String, ConfigurationGroup>()
+    keys.forEach { key ->
+        var children = roots
+        var current: ConfigurationGroup? = null
+        ConfigurationKeyLabels.hierarchy(app, key).forEach { segment ->
+            val group = children.getOrPut(segment) { ConfigurationGroup(segment) }
+            current = group
+            children = group.children
+        }
+        current?.settings?.add(key)
+    }
+    return roots.values.toList()
+}
+
+@Composable
+private fun ConfigurationGroupContent(
+    group: ConfigurationGroup,
+    values: JSONObject,
+    app: JSONObject?,
+    packageName: String,
+    navController: NavHostController,
+    onChange: (String, Any) -> Unit,
+) {
+    ExpandableCard(group.title) {
+        group.settings.forEachIndexed { index, key ->
+            ConfigurationSetting(
+                key,
+                ConfigurationKeyLabels.leafLabel(app, key),
+                values,
+                onChange = { onChange(key, it) },
+                onEditList = { navController.navigate("strings/${Uri.encode(packageName)}/${Uri.encode(key)}") },
+            )
+            if (index < group.settings.lastIndex) Spacer(Modifier.height(14.dp))
+        }
+        group.children.values.forEach { child ->
+            if (group.settings.isNotEmpty()) Spacer(Modifier.height(10.dp))
+            ConfigurationGroupContent(child, values, app, packageName, navController, onChange)
+        }
     }
 }
 
@@ -662,16 +706,17 @@ private fun ConfigurationSetting(key: String, label: String, configuration: JSON
         Column(Modifier.fillMaxWidth()) {
             if (key.contains("color", true) || configuration.optString(key).startsWith("#")) {
                 val previewColor = runCatching { Color(android.graphics.Color.parseColor(configuration.optString(key))) }.getOrDefault(MaterialTheme.colorScheme.surfaceVariant)
-                Row(Modifier.fillMaxWidth().padding(top = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(44.dp).background(previewColor, RoundedCornerShape(8.dp)))
                     OutlinedButton(onClick = { showColorEditor = true }, modifier = Modifier.padding(start = 10.dp)) { Text("Edit color") }
                 }
+                Spacer(Modifier.height(8.dp))
             }
-            OutlinedTextField(configuration.optString(key), { onChange(it) }, label = { Text(label) }, modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp), singleLine = true)
+            OutlinedTextField(configuration.optString(key), { onChange(it) }, label = { Text(label) }, modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), singleLine = true)
             if (isFile) {
                 OutlinedButton(
                     onClick = { if (isFolder) folderLauncher.launch(null) else fileLauncher.launch(arrayOf("*/*")) },
-                    modifier = Modifier.padding(bottom = 6.dp),
+                    modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
                 ) { Text(if (isFolder) "Choose folder" else "Choose file") }
             }
         }

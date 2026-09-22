@@ -8,6 +8,12 @@ import org.json.JSONObject
  * that are useful to people. Raw keys remain the storage and bridge contract.
  */
 internal object ConfigurationKeyLabels {
+    fun hierarchy(app: JSONObject?, key: String): List<String> =
+        label(app, key).split(" > ").filter(String::isNotBlank)
+
+    fun leafLabel(app: JSONObject?, key: String): String =
+        hierarchy(app, key).lastOrNull() ?: title(key)
+
     fun label(app: JSONObject?, key: String): String {
         val normalizedKey = key.replaceFirst(Regex("^(RuntimeControls|runtimeControls)"), "runtimeOverlay")
         val patch = patchName(app, normalizedKey)
