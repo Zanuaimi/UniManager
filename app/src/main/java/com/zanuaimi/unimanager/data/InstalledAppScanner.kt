@@ -181,6 +181,22 @@ object InstalledAppScanner {
                 targetConfiguration.put(key, incomingConfiguration.get(key))
             }
         }
+        val targetSchema = target.optJSONArray("configuration_schema") ?: JSONArray().also { target.put("configuration_schema", it) }
+        incoming.optJSONArray("configuration_schema")?.let { incomingSchema ->
+            for (index in 0 until incomingSchema.length()) {
+                val candidate = incomingSchema.optJSONObject(index) ?: continue
+                val candidateKey = candidate.optString("key")
+                if (candidateKey.isBlank()) continue
+                var existingIndex = -1
+                for (schemaIndex in 0 until targetSchema.length()) {
+                    if (targetSchema.optJSONObject(schemaIndex)?.optString("key") == candidateKey) {
+                        existingIndex = schemaIndex
+                        break
+                    }
+                }
+                if (existingIndex >= 0) targetSchema.put(existingIndex, candidate) else targetSchema.put(candidate)
+            }
+        }
         if (incoming.has("protocol_version")) target.put("protocol_version", incoming.optInt("protocol_version"))
         if (incoming.has("source_version")) target.put("source_version", incoming.optString("source_version"))
     }

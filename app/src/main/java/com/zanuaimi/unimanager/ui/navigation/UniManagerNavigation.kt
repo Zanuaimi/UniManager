@@ -330,8 +330,14 @@ private fun RegisteredAppCard(app: RegisteredApp, navController: NavHostControll
                 Text(app.label, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                 Text(app.packageName, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                 Text("v${app.version.ifBlank { "unknown" }}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                if (app.statusLabel != "Registered") {
+                    Text(app.statusLabel, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
             }
-            IconButton(onClick = { navController.navigate("details/${Uri.encode(app.packageName)}") }) { Icon(Icons.Default.Settings, "Configure ${app.label}") }
+            IconButton(
+                enabled = app.isEditable,
+                onClick = { navController.navigate("details/${Uri.encode(app.packageName)}") },
+            ) { Icon(Icons.Default.Settings, "Configure ${app.label}") }
             IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, "Remove ${app.label}") }
         }
     }
@@ -613,12 +619,16 @@ private fun AppDetailsScreen(packageName: String, navController: NavHostControll
     val app by viewModel.app.collectAsStateWithLifecycle()
     val storedConfiguration by viewModel.configuration.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf("") }
+    var saveMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var configuration by remember { mutableStateOf<JSONObject?>(null) }
     LaunchedEffect(storedConfiguration) { configuration = JSONObject(storedConfiguration.toString()) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         ScreenHeader(app?.label ?: "App", onBack = { navController.popBackStack() })
         if (app == null) { LoadingOrMessage("Loading configuration..."); return@Column }
         Text(packageName, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+        if (!app!!.isEditable) {
+            NoticeCard(app!!.statusLabel, app!!.statusDetail)
+        }
         OutlinedTextField(query, { query = it }, label = { Text("Search settings") }, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), singleLine = true)
         val values = configuration ?: JSONObject()
         val keys = values.keys().asSequence().toList().filter { key ->
@@ -637,7 +647,18 @@ private fun AppDetailsScreen(packageName: String, navController: NavHostControll
             )
             Spacer(Modifier.height(10.dp))
         }
-        Button(onClick = { viewModel.save(values) { navController.popBackStack() } }, modifier = Modifier.fillMaxWidth()) { Text("Save configuration") }
+        saveMessage?.let { NoticeCard("Unable to save configuration", it) }
+        Button(
+            enabled = app!!.isEditable,
+            onClick = {
+                saveMessage = null
+                viewModel.save(values) { saved ->
+                    if (saved) navController.popBackStack()
+                    else saveMessage = "The app registry rejected this update. Reopen the app details and try again."
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text(if (app!!.isEditable) "Save configuration" else "Configuration is read-only") }
     }
 }
 
@@ -676,6 +697,7 @@ private fun ConfigurationGroupContent(
                 key,
                 ConfigurationKeyLabels.leafLabel(app, key),
                 values,
+                app,
                 onChange = { onChange(key, it) },
                 onEditList = { navController.navigate("strings/${Uri.encode(packageName)}/${Uri.encode(key)}") },
             )
@@ -689,13 +711,14 @@ private fun ConfigurationGroupContent(
 }
 
 @Composable
-private fun ConfigurationSetting(key: String, label: String, configuration: JSONObject, onChange: (Any) -> Unit, onEditList: () -> Unit) {
+private fun ConfigurationSetting(key: String, label: String, configuration: JSONObject, app: JSONObject?, onChange: (Any) -> Unit, onEditList: () -> Unit) {
     val value = configuration.opt(key)
     var showColorEditor by rememberSaveable(key) { mutableStateOf(false) }
-    val choices = ConfigurationKeyLabels.choices(key)
-    if (value is Boolean || key == "block_ads" || key == "block_hosts") {
+    val choices = ConfigurationKeyLabels.choices(app, key)
+    val descriptorType = ConfigurationKeyLabels.type(app, key)
+    if (value is Boolean || descriptorType == "boolean" || key == "block_ads" || key == "block_hosts") {
         SettingSwitch(label, "Managed by the patch capability.", configuration.optBoolean(key), { onChange(it) })
-    } else if (value is JSONArray || value is String && value.startsWith("[")) {
+    } else if (value is JSONArray || descriptorType == "list" || value is String && value.startsWith("[")) {
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(label, Modifier.weight(1f)); OutlinedButton(onClick = onEditList) { Text("Edit list") }
         }
@@ -735,7 +758,13 @@ private fun ConfigurationSetting(key: String, label: String, configuration: JSON
                 }
                 Spacer(Modifier.height(8.dp))
             }
-            OutlinedTextField(configuration.optString(key), { onChange(it) }, label = { Text(label) }, modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), singleLine = true)
+            OutlinedTextField(
+                configuration.optString(key),
+                { onChange(coerceEditedValue(value, descriptorType, it)) },
+                label = { Text(label) },
+                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                singleLine = true,
+            )
             if (isFile) {
                 OutlinedButton(
                     onClick = { if (isFolder) folderLauncher.launch(null) else fileLauncher.launch(arrayOf("*/*")) },
@@ -751,6 +780,18 @@ private fun ConfigurationSetting(key: String, label: String, configuration: JSON
             onApply = { color -> onChange(color); showColorEditor = false },
         )
     }
+}
+
+private fun coerceEditedValue(original: Any?, descriptorType: String?, input: String): Any = when {
+    descriptorType == "integer" -> input.toIntOrNull() ?: original ?: input
+    descriptorType == "long" -> input.toLongOrNull() ?: original ?: input
+    descriptorType == "float" -> input.toFloatOrNull() ?: original ?: input
+    descriptorType == "double" || descriptorType == "number" -> input.toDoubleOrNull() ?: original ?: input
+    original is Int -> input.toIntOrNull() ?: original
+    original is Long -> input.toLongOrNull() ?: original
+    original is Float -> input.toFloatOrNull() ?: original
+    original is Double -> input.toDoubleOrNull() ?: original
+    else -> input
 }
 
 private data class RgbColor(val red: Int, val green: Int, val blue: Int) {
@@ -831,7 +872,14 @@ private fun MultiPartStringsScreen(packageName: String, key: String, navControll
             }
         }
         OutlinedButton(onClick = { values.value = values.value + "" }, modifier = Modifier.fillMaxWidth()) { Text("Add string") }
-        Button(onClick = { viewModel.save(JSONObject().put(key, JSONArray(values.value.filter(String::isNotBlank)))) { navController.popBackStack() } }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("Save list") }
+        Button(
+            onClick = {
+                viewModel.save(JSONObject().put(key, JSONArray(values.value.filter(String::isNotBlank)))) { saved ->
+                    if (saved) navController.popBackStack()
+                }
+            },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        ) { Text("Save list") }
     }
 }
 

@@ -9,6 +9,7 @@ import org.json.JSONObject
  */
 internal object ConfigurationKeyLabels {
     data class Choice(val label: String, val value: String)
+    private data class Descriptor(val label: String, val type: String?, val choices: List<Choice>)
 
     private val universalOverlayChoices = mapOf(
         "runtimeOverlayStatisticMonitorPosition" to listOf(
@@ -50,7 +51,9 @@ internal object ConfigurationKeyLabels {
         "sansMedium" to "Sans medium", "sansBlack" to "Sans black",
     ).map { Choice(it.second, it.first) }
 
-    fun choices(key: String): List<Choice>? = universalOverlayChoices[key]
+    fun choices(app: JSONObject?, key: String): List<Choice>? = descriptor(app, key)?.choices?.takeIf { it.isNotEmpty() } ?: universalOverlayChoices[key]
+
+    fun type(app: JSONObject?, key: String): String? = descriptor(app, key)?.type
 
     fun hierarchy(app: JSONObject?, key: String): List<String> =
         label(app, key).split(" > ").filter(String::isNotBlank)
@@ -61,6 +64,8 @@ internal object ConfigurationKeyLabels {
     fun label(app: JSONObject?, key: String): String {
         val normalizedKey = key.replaceFirst(Regex("^(RuntimeControls|runtimeControls)"), "runtimeOverlay")
         val patch = patchName(app, normalizedKey)
+        val descriptor = descriptor(app, normalizedKey)
+        if (descriptor != null && descriptor.label.isNotBlank()) return "$patch > ${descriptor.label}"
         val path = when {
             normalizedKey == "block_ads" -> "Block Ads > Enable"
             normalizedKey == "block_hosts" -> "Block Ads / Tracking Hosts > Enable"
@@ -97,14 +102,43 @@ internal object ConfigurationKeyLabels {
 
     fun patchName(app: JSONObject?, key: String = ""): String {
         val normalizedKey = key.replaceFirst(Regex("^(RuntimeControls|runtimeControls)"), "runtimeOverlay")
+        val patches = app?.optJSONArray("patches") ?: JSONArray()
+        for (index in 0 until patches.length()) {
+            val patch = patches.optJSONObject(index) ?: continue
+            val id = patch.optString("id").orEmpty()
+            val prefixes = patch.optJSONArray("configuration_prefixes")
+            if (id.isNotBlank() && prefixes != null && (0 until prefixes.length()).any { normalizedKey.startsWith(prefixes.optString(it)) }) {
+                return patchDisplayName(id)
+            }
+        }
+        // Prefixes are the backward-compatible fallback for older metadata that
+        // predates configuration_prefixes.
         if (normalizedKey.startsWith("block_")) return "Ads Block Patch"
         if (normalizedKey.startsWith("runtimeOverlay")) return "Universal Overlay Patch"
-        val patches = app?.optJSONArray("patches") ?: JSONArray()
         for (index in 0 until patches.length()) {
             val id = patches.optJSONObject(index)?.optString("id").orEmpty()
             if (id.isNotBlank()) return patchDisplayName(id)
         }
         return "Patch settings"
+    }
+
+    private fun descriptor(app: JSONObject?, key: String): Descriptor? {
+        val schema = app?.optJSONArray("configuration_schema") ?: return null
+        for (index in 0 until schema.length()) {
+            val item = schema.optJSONObject(index) ?: continue
+            if (item.optString("key") != key) continue
+            val choices = item.optJSONArray("choices")?.let { values ->
+                (0 until values.length()).mapNotNull { choiceIndex ->
+                    when (val choice = values.opt(choiceIndex)) {
+                        is JSONObject -> Choice(choice.optString("label"), choice.optString("value"))
+                        is String -> Choice(choice, choice)
+                        else -> null
+                    }?.takeIf { it.label.isNotBlank() && it.value.isNotBlank() }
+                }
+            }.orEmpty()
+            return Descriptor(item.optString("label"), item.optString("type").takeIf(String::isNotBlank), choices)
+        }
+        return null
     }
 
     private fun patchDisplayName(id: String): String = when (id) {

@@ -8,6 +8,9 @@ data class RegisteredApp(
     val label: String,
     val version: String,
     val raw: JSONObject,
+    val statusLabel: String = "Registered",
+    val statusDetail: String = "",
+    val isEditable: Boolean = true,
 )
 
 data class InstalledApp(

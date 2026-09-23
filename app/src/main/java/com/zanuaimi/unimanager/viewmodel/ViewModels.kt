@@ -239,7 +239,11 @@ class AppDetailsViewModel(application: Application, val packageName: String) : A
         }
     }
 
-    fun save(values: JSONObject, onComplete: () -> Unit) { viewModelScope.launch { repository.updateConfiguration(packageName, values); onComplete() } }
+    fun save(values: JSONObject, onComplete: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            onComplete(repository.updateConfiguration(packageName, values))
+        }
+    }
 }
 
 class AppDetailsViewModelFactory(

@@ -38,12 +38,18 @@ class AppRegistryRepository(context: Context) {
         registry.configuration(packageName)
     }
 
-    private fun toModel(app: JSONObject) = RegisteredApp(
-        packageName = app.optString("package_name"),
-        label = app.optString("app_label").ifBlank { "Unknown app" },
-        version = listOf("app_version", "version_name", "version")
-            .firstNotNullOfOrNull { app.optString(it).takeIf(String::isNotBlank) }
-            ?: "Version unknown",
-        raw = JSONObject(app.toString()),
-    )
+    private fun toModel(app: JSONObject): RegisteredApp {
+        val status = registry.status(app)
+        return RegisteredApp(
+            packageName = app.optString("package_name"),
+            label = app.optString("app_label").ifBlank { "Unknown app" },
+            version = listOf("app_version", "version_name", "version")
+                .firstNotNullOfOrNull { app.optString(it).takeIf(String::isNotBlank) }
+                ?: "Version unknown",
+            raw = JSONObject(app.toString()),
+            statusLabel = status.label,
+            statusDetail = status.detail,
+            isEditable = status.kind == AppRegistry.StatusKind.READY,
+        )
+    }
 }
