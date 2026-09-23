@@ -692,11 +692,34 @@ private fun ConfigurationGroupContent(
 private fun ConfigurationSetting(key: String, label: String, configuration: JSONObject, onChange: (Any) -> Unit, onEditList: () -> Unit) {
     val value = configuration.opt(key)
     var showColorEditor by rememberSaveable(key) { mutableStateOf(false) }
+    val choices = ConfigurationKeyLabels.choices(key)
     if (value is Boolean || key == "block_ads" || key == "block_hosts") {
         SettingSwitch(label, "Managed by the patch capability.", configuration.optBoolean(key), { onChange(it) })
     } else if (value is JSONArray || value is String && value.startsWith("[")) {
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(label, Modifier.weight(1f)); OutlinedButton(onClick = onEditList) { Text("Edit list") }
+        }
+    } else if (choices != null) {
+        var expanded by rememberSaveable(key) { mutableStateOf(false) }
+        val current = configuration.optString(key)
+        val selected = choices.firstOrNull { it.value == current }
+        Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+            Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+            Box(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(selected?.label ?: current.ifBlank { "Choose an option" }, modifier = Modifier.weight(1f))
+                    Text("▾")
+                }
+                ThemedDropdownMenu(expanded, onDismissRequest = { expanded = false }) {
+                    choices.forEachIndexed { index, choice ->
+                        if (index > 0) ThemedDropdownDivider()
+                        DropdownMenuItem(
+                            text = { Text(choice.label) },
+                            onClick = { expanded = false; onChange(choice.value) },
+                        )
+                    }
+                }
+            }
         }
     } else {
         val isFolder = key.contains("folder", true)
