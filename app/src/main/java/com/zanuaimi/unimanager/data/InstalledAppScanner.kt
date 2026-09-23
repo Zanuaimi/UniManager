@@ -199,6 +199,14 @@ object InstalledAppScanner {
         }
         if (incoming.has("protocol_version")) target.put("protocol_version", incoming.optInt("protocol_version"))
         if (incoming.has("source_version")) target.put("source_version", incoming.optString("source_version"))
+        if (incoming.has("preset_catalog_version")) target.put("preset_catalog_version", incoming.optInt("preset_catalog_version"))
+        if (incoming.has("preset_catalog")) target.put("preset_catalog", incoming.optJSONArray("preset_catalog"))
+        if (incoming.has("runtimeOverlaySelectedPreset")) {
+            target.put("runtimeOverlaySelectedPreset", incoming.optString("runtimeOverlaySelectedPreset"))
+        }
+        if (incoming.has("runtimeOverlaySelectedPresetVersion")) {
+            target.put("runtimeOverlaySelectedPresetVersion", incoming.optInt("runtimeOverlaySelectedPresetVersion"))
+        }
     }
 
     private fun decode(encoded: String): JSONObject? = runCatching {

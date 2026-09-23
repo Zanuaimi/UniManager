@@ -15,6 +15,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +33,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -71,6 +75,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -118,6 +123,7 @@ import com.zanuaimi.unimanager.viewmodel.AppsViewModel
 import com.zanuaimi.unimanager.viewmodel.ManualAppPickerViewModel
 import com.zanuaimi.unimanager.viewmodel.SettingsViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -620,45 +626,198 @@ private fun AppDetailsScreen(packageName: String, navController: NavHostControll
     val storedConfiguration by viewModel.configuration.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf("") }
     var saveMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var confirmation by rememberSaveable { mutableStateOf<String?>(null) }
+    var isSaving by rememberSaveable { mutableStateOf(false) }
     var configuration by remember { mutableStateOf<JSONObject?>(null) }
-    LaunchedEffect(storedConfiguration) { configuration = JSONObject(storedConfiguration.toString()) }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        ScreenHeader(app?.label ?: "App", onBack = { navController.popBackStack() })
-        if (app == null) { LoadingOrMessage("Loading configuration..."); return@Column }
-        Text(packageName, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-        if (!app!!.isEditable) {
-            NoticeCard(app!!.statusLabel, app!!.statusDetail)
+    var originalConfiguration by remember { mutableStateOf<JSONObject?>(null) }
+    var presetDrafts by remember(packageName) { mutableStateOf<Map<String, String>>(emptyMap()) }
+    val navigationScope = rememberCoroutineScope()
+    LaunchedEffect(storedConfiguration.toString(), app?.raw?.toString()) {
+        val raw = app?.raw ?: return@LaunchedEffect
+        if (storedConfiguration.length() == 0) return@LaunchedEffect
+        val stored = JSONObject(storedConfiguration.toString())
+        val selectedPreset = stored.optString("runtimeOverlaySelectedPreset", "custom")
+        val initial = JSONObject(stored.toString())
+        if (selectedPreset != "custom") {
+            ConfigurationKeyLabels.presetConfiguration(raw, selectedPreset)?.let { preset ->
+                overlayPresetConfiguration(initial, preset)
+            }
         }
-        OutlinedTextField(query, { query = it }, label = { Text("Search settings") }, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), singleLine = true)
-        val values = configuration ?: JSONObject()
-        val keys = values.keys().asSequence().toList().filter { key ->
-            val label = ConfigurationKeyLabels.label(app?.raw, key)
-            query.isBlank() || key.contains(query, true) || label.contains(query, true)
+        if (configuration == null) {
+            originalConfiguration = JSONObject(initial.toString())
+            configuration = initial
         }
-        if (keys.isEmpty()) NoticeCard("No configurable capabilities", "This app registered successfully, but it did not report manager-editable settings.")
-        buildConfigurationTree(app?.raw, keys).forEach { group ->
-            ConfigurationGroupContent(
-                group = group,
-                values = values,
-                app = app?.raw,
-                packageName = packageName,
-                navController = navController,
-                onChange = { key, value -> values.put(key, value); configuration = JSONObject(values.toString()) },
-            )
-            Spacer(Modifier.height(10.dp))
+    }
+    val values = configuration ?: JSONObject()
+    val original = originalConfiguration
+    val hasChanges = original != null && values.toString() != original.toString()
+
+    fun discardChanges(goBack: Boolean) {
+        original?.let { configuration = JSONObject(it.toString()) }
+        presetDrafts = emptyMap()
+        saveMessage = null
+        if (goBack) {
+            navigationScope.launch {
+                delay(220)
+                navController.popBackStack()
+            }
         }
-        saveMessage?.let { NoticeCard("Unable to save configuration", it) }
-        Button(
-            enabled = app!!.isEditable,
-            onClick = {
-                saveMessage = null
-                viewModel.save(values) { saved ->
-                    if (saved) navController.popBackStack()
-                    else saveMessage = "The app registry rejected this update. Reopen the app details and try again."
+    }
+
+    BackHandler {
+        if (hasChanges) confirmation = "discard-back" else navController.popBackStack()
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().padding(16.dp)) {
+            ScreenHeader(app?.label ?: "App", onBack = {
+                if (hasChanges) confirmation = "discard-back" else navController.popBackStack()
+            })
+            if (app == null) { LoadingOrMessage("Loading configuration..."); return@Column }
+            Text(packageName, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+            if (!app!!.isEditable) {
+                NoticeCard(app!!.statusLabel, app!!.statusDetail)
+            }
+            OutlinedTextField(query, { query = it }, label = { Text("Search settings") }, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), singleLine = true)
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                    val keys = values.keys().asSequence().toList().filter { key ->
+                        if (key == "runtimeOverlaySelectedPresetVersion") {
+                            false
+                        } else {
+                            val label = ConfigurationKeyLabels.label(app?.raw, key)
+                            query.isBlank() || key.contains(query, true) || label.contains(query, true)
+                        }
+                    }.sortedWith(compareBy { if (it == "runtimeOverlaySelectedPreset") 0 else 1 })
+                    if (keys.isEmpty()) NoticeCard("No configurable capabilities", "This app registered successfully, but it did not report manager-editable settings.")
+                    buildConfigurationTree(app?.raw, keys).forEach { group ->
+                        ConfigurationGroupContent(
+                            group = group,
+                            values = values,
+                            app = app?.raw,
+                            packageName = packageName,
+                            navController = navController,
+                            onChange = { key, value ->
+                                if (key == "runtimeOverlaySelectedPreset") {
+                                    val previousId = values.optString(key, "custom")
+                                    val nextId = value.toString()
+                                    val updatedDrafts = presetDrafts.toMutableMap().apply {
+                                        put(previousId, values.toString())
+                                    }
+                                    val next = updatedDrafts[nextId]?.let(::JSONObject) ?: JSONObject(values.toString())
+                                    if (nextId != "custom") {
+                                        ConfigurationKeyLabels.presetConfiguration(app?.raw, nextId)?.let { preset ->
+                                            overlayPresetConfiguration(next, preset)
+                                        }
+                                    }
+                                    next.put(key, nextId)
+                                    ConfigurationKeyLabels.presetVersion(app?.raw, nextId)?.let {
+                                        next.put("runtimeOverlaySelectedPresetVersion", it)
+                                    }
+                                    presetDrafts = updatedDrafts
+                                    configuration = next
+                                } else {
+                                    values.put(key, value)
+                                    configuration = JSONObject(values.toString())
+                                }
+                            },
+                        )
+                        Spacer(Modifier.height(10.dp))
+                    }
+                    saveMessage?.let { NoticeCard("Unable to save configuration", it) }
+                    Spacer(Modifier.height(96.dp))
                 }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = hasChanges && app?.isEditable == true,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut(),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp,
+                shadowElevation = 8.dp,
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        enabled = !isSaving,
+                        onClick = { confirmation = "discard-stay" },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text("Discard Changes")
+                    }
+                    Button(
+                        enabled = !isSaving,
+                        onClick = { confirmation = "save" },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text("Save Changes")
+                    }
+                }
+            }
+        }
+    }
+
+    when (confirmation) {
+        "discard-stay", "discard-back" -> AlertDialog(
+            onDismissRequest = { confirmation = null },
+            title = { Text("Discard Changes?") },
+            text = { Text("Your changes will be removed and the last saved configuration will be restored. This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val goBack = confirmation == "discard-back"
+                    confirmation = null
+                    discardChanges(goBack)
+                }) { Text("Yes, discard") }
             },
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text(if (app!!.isEditable) "Save configuration" else "Configuration is read-only") }
+            dismissButton = { TextButton(onClick = { confirmation = null }) { Text("Keep editing") } },
+        )
+        "save" -> AlertDialog(
+            onDismissRequest = { confirmation = null },
+            title = { Text("Save Changes?") },
+            text = { Text("These settings will be saved to UniManager and used by the patched app the next time it starts. The current app session will not be changed.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmation = null
+                    saveMessage = null
+                    isSaving = true
+                    val snapshot = JSONObject(values.toString())
+                    viewModel.save(snapshot) { saved ->
+                        isSaving = false
+                        if (saved) {
+                            originalConfiguration = JSONObject(snapshot.toString())
+                            presetDrafts = emptyMap()
+                            navigationScope.launch {
+                                delay(220)
+                                navController.popBackStack()
+                            }
+                        } else {
+                            saveMessage = "The app registry rejected this update. Reopen the app details and try again."
+                        }
+                    }
+                }, enabled = !isSaving) { Text(if (isSaving) "Saving..." else "Yes, save") }
+            },
+            dismissButton = { TextButton(onClick = { confirmation = null }) { Text("Keep editing") } },
+        )
+    }
+}
+
+private fun overlayPresetConfiguration(target: JSONObject, preset: JSONObject) {
+    val keys = preset.keys()
+    while (keys.hasNext()) {
+        val key = keys.next()
+        target.put(key, preset.get(key))
     }
 }
 
@@ -714,7 +873,11 @@ private fun ConfigurationGroupContent(
 private fun ConfigurationSetting(key: String, label: String, configuration: JSONObject, app: JSONObject?, onChange: (Any) -> Unit, onEditList: () -> Unit) {
     val value = configuration.opt(key)
     var showColorEditor by rememberSaveable(key) { mutableStateOf(false) }
-    val choices = ConfigurationKeyLabels.choices(app, key)
+    val choices = if (key == "runtimeOverlaySelectedPreset") {
+        ConfigurationKeyLabels.presetChoices(app)
+    } else {
+        ConfigurationKeyLabels.choices(app, key)
+    }
     val descriptorType = ConfigurationKeyLabels.type(app, key)
     if (value is Boolean || descriptorType == "boolean" || key == "block_ads" || key == "block_hosts") {
         SettingSwitch(label, "Managed by the patch capability.", configuration.optBoolean(key), { onChange(it) })

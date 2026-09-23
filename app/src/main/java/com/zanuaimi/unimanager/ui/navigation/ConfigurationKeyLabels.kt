@@ -53,6 +53,38 @@ internal object ConfigurationKeyLabels {
 
     fun choices(app: JSONObject?, key: String): List<Choice>? = descriptor(app, key)?.choices?.takeIf { it.isNotEmpty() } ?: universalOverlayChoices[key]
 
+    fun presetChoices(app: JSONObject?): List<Choice> = buildList {
+        add(Choice("Custom (UniPatches defaults)", "custom"))
+        val catalog = app?.optJSONArray("preset_catalog") ?: return@buildList
+        for (index in 0 until catalog.length()) {
+            val preset = catalog.optJSONObject(index) ?: continue
+            val id = preset.optString("id")
+            if (id.isNotBlank() && id != "custom") {
+                add(Choice(preset.optString("name").ifBlank { id }, id))
+            }
+        }
+    }
+
+    fun presetConfiguration(app: JSONObject?, id: String): JSONObject? {
+        val catalog = app?.optJSONArray("preset_catalog") ?: return null
+        for (index in 0 until catalog.length()) {
+            val preset = catalog.optJSONObject(index) ?: continue
+            if (preset.optString("id") == id) {
+                return preset.optJSONObject("configuration")?.let { JSONObject(it.toString()) }
+            }
+        }
+        return null
+    }
+
+    fun presetVersion(app: JSONObject?, id: String): Int? {
+        val catalog = app?.optJSONArray("preset_catalog") ?: return null
+        for (index in 0 until catalog.length()) {
+            val preset = catalog.optJSONObject(index) ?: continue
+            if (preset.optString("id") == id) return preset.optInt("version").takeIf { it > 0 }
+        }
+        return null
+    }
+
     fun type(app: JSONObject?, key: String): String? = descriptor(app, key)?.type
 
     fun hierarchy(app: JSONObject?, key: String): List<String> =
@@ -72,7 +104,7 @@ internal object ConfigurationKeyLabels {
             normalizedKey.startsWith("block_") -> "Block Ads > ${title(normalizedKey.removePrefix("block_"))}"
             normalizedKey == "runtimeOverlayEnableUniManagerIntegration" -> "Overlay integration > UniManager > Enable integration"
             normalizedKey == "runtimeOverlayRememberUniManagerRuntimeChanges" -> "Overlay integration > UniManager > Remember runtime changes"
-            normalizedKey == "runtimeOverlaySelectedPreset" -> "Quick setup > UI preset"
+            normalizedKey == "runtimeOverlaySelectedPreset" -> "UI preset"
             normalizedKey == "runtimeOverlayActivateStatisticsOnLaunch" -> "Module Settings > Statistic Modules Settings > Activate statistics on launch"
             normalizedKey == "runtimeOverlayEnableMonitorsOnLaunch" -> "Module Settings > Statistic Modules Settings > Enable monitors on launch"
             normalizedKey in setOf(

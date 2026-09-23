@@ -44,6 +44,7 @@ class AppRegistry(context: Context) {
                 merged.put(key, incoming.get(key))
             }
         }
+        syncPresetMetadata(merged, merged.optJSONObject("configuration"))
         merged.put("manager_last_seen_at", System.currentTimeMillis())
         // Registration is a patch-install/update event. Commit it before replying so
         // a manager or host process crash cannot acknowledge an unpersisted record.
@@ -97,6 +98,7 @@ class AppRegistry(context: Context) {
         val configuration = JSONObject(current.optJSONObject("configuration")?.toString() ?: "{}")
         merge(configuration, values)
         current.put("configuration", configuration)
+        syncPresetMetadata(current, configuration)
         current.put("manager_last_updated_at", System.currentTimeMillis())
         val serialized = current.toString()
         if (serialized.toByteArray(StandardCharsets.UTF_8).size > MAX_PAYLOAD_BYTES) return false
@@ -261,6 +263,16 @@ class AppRegistry(context: Context) {
             result.put(key, config.get(key))
         }
         return result.toString()
+    }
+
+    private fun syncPresetMetadata(target: JSONObject, configuration: JSONObject?) {
+        if (configuration == null) return
+        if (configuration.has("runtimeOverlaySelectedPreset")) {
+            target.put("runtimeOverlaySelectedPreset", configuration.optString("runtimeOverlaySelectedPreset"))
+        }
+        if (configuration.has("runtimeOverlaySelectedPresetVersion")) {
+            target.put("runtimeOverlaySelectedPresetVersion", configuration.optInt("runtimeOverlaySelectedPresetVersion"))
+        }
     }
 
     private fun parse(value: String?): JSONObject? = runCatching {
