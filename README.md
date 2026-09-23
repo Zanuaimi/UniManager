@@ -6,9 +6,28 @@
 
 <p align="center"><strong>The companion app for UniPatches-enabled APKs.</strong></p>
 
-UniManager keeps configuration for patched Android apps in a separate app. This
-means settings can survive an APK uninstall or repatch, instead of being stored
-only inside the patched app.
+<p align="center">
+  <a href="https://github.com/Zanuaimi/UniManager/releases/latest"><strong>⬇ Download the latest APK</strong></a>
+</p>
+
+UniManager is a companion Android app for managing configuration shared by
+UniPatches-enabled APKs. It keeps persistent settings outside the patched app,
+so supported configuration can survive an APK uninstall, repatch, or temporary
+loss of communication with UniManager.
+
+UniManager is optional. Patched apps continue to work with their embedded
+patch-time settings when UniManager is not installed or cannot be reached.
+
+## Supported UniPatches integrations
+
+UniManager currently supports these patches from [UniPatches](https://github.com/Zanuaimi/UniPatches):
+
+- **Universal Overlay Patch** - Manage supported overlay appearance, module,
+  and runtime settings.
+- **Ads Block Patch** - Manage supported ad-format and host-blocking settings.
+
+Integration is enabled from the patch settings in Morphe. Only settings and
+capabilities included by the patch are exposed in UniManager.
 
 ## What it does
 
@@ -64,10 +83,15 @@ Registrations are keyed by Android package name. Repatching the same package
 updates its existing registration and can add newly available patch capabilities.
 Cloned APKs with different package names are tracked as separate apps.
 
-## Download
+## Download and installation
 
-Stable APKs are published on the [GitHub Releases](https://github.com/Zanuaimi/UniManager/releases)
-page. Android may require permission to install apps from unknown sources when
+Use the **Download the latest APK** link above, or open the [latest GitHub
+release](https://github.com/Zanuaimi/UniManager/releases/latest). Each release
+uses a versioned asset name such as `UniManager-1.3.1.apk`, so the latest-release
+link always resolves to the newest published version without hardcoding a
+version in this README.
+
+Android may require permission to install apps from unknown sources when
 installing a release APK outside Google Play.
 
 ## Related project
@@ -84,5 +108,5 @@ The project is an Android application written in Kotlin. Build a debug APK with:
 ../UniPatches/gradlew assembleDebug
 ```
 
-The release workflow builds a signed `UniManager.apk` when the repository's
+The release workflow builds a signed `UniManager-<version>.apk` when the repository's
 release signing secrets are configured.

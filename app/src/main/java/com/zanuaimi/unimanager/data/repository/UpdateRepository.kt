@@ -24,16 +24,25 @@ class UpdateRepository(context: Context) {
             if (connection.responseCode !in 200..299) return@withContext null
             val release = connection.inputStream.bufferedReader().use { JSONObject(it.readText()) }
             val version = release.optString("tag_name").removePrefix("v")
-            val apkUrl = release.optJSONArray("assets")?.let { assets ->
-                (0 until assets.length()).firstNotNullOfOrNull { index ->
-                    assets.optJSONObject(index)?.takeIf { it.optString("name") == "UniManager.apk" }
-                        ?.optString("browser_download_url")
-                }
-            }
+            val apkUrl = findApkUrl(release, version)
             ReleaseInfo(version, apkUrl)
         } finally {
             connection.disconnect()
         }
+    }
+
+    private fun findApkUrl(release: JSONObject, version: String): String? {
+        val assets = release.optJSONArray("assets") ?: return null
+        val versionedName = "UniManager-$version.apk"
+        var legacyUrl: String? = null
+        for (index in 0 until assets.length()) {
+            val asset = assets.optJSONObject(index) ?: continue
+            val name = asset.optString("name")
+            val url = asset.optString("browser_download_url").takeIf { it.isNotBlank() } ?: continue
+            if (name == versionedName) return url
+            if (name == "UniManager.apk") legacyUrl = url
+        }
+        return legacyUrl
     }
 
     suspend fun download(url: String): File = withContext(Dispatchers.IO) {

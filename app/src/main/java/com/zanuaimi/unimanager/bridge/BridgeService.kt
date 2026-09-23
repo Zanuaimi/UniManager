@@ -15,10 +15,6 @@ class BridgeService : Service() {
     private val binder = object : Binder() {
         override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
             if (reply == null) return false
-            enforceCallingPermission(
-                "com.zanuaimi.unimanager.permission.BRIDGE",
-                "UniManager bridge permission required",
-            )
             val protocol = data.readInt()
             if (protocol != 1) {
                 reply.writeNoException()
@@ -57,6 +53,10 @@ class BridgeService : Service() {
     }
 
     private fun isCallerAuthorized(payload: String): Boolean {
+        // The service is exported so patched APKs remain compatible even when Android
+        // installed them before UniManager and did not grant the optional custom
+        // permission. Package ownership is the authoritative check: a caller may only
+        // read or update the registry entry for one of its own packages.
         val packageName = runCatching { JSONObject(payload).optString("package_name").trim() }
             .getOrDefault("")
         if (packageName.isBlank()) return false

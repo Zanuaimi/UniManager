@@ -42,8 +42,7 @@
 
         <service
             android:name=".bridge.BridgeService"
-            android:exported="true"
-            android:permission="com.zanuaimi.unimanager.permission.BRIDGE">
+            android:exported="true">
             <intent-filter>
                 <action android:name="com.zanuaimi.unimanager.BRIDGE" />
             </intent-filter>
