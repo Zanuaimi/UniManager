@@ -849,8 +849,12 @@ private fun ConfigurationGroupContent(
     packageName: String,
     navController: NavHostController,
     onChange: (String, Any) -> Unit,
+    depth: Int = 0,
 ) {
-    ExpandableCard(group.title) {
+    // Keep the top-level patch groups open for immediate access, but start every
+    // nested hierarchy closed so expanding a parent does not reveal a wall of
+    // settings at once.
+    ExpandableCard(group.title, initiallyExpanded = depth == 0) {
         group.settings.forEachIndexed { index, key ->
             ConfigurationSetting(
                 key,
@@ -864,7 +868,7 @@ private fun ConfigurationGroupContent(
         }
         group.children.values.forEach { child ->
             if (group.settings.isNotEmpty()) Spacer(Modifier.height(10.dp))
-            ConfigurationGroupContent(child, values, app, packageName, navController, onChange)
+            ConfigurationGroupContent(child, values, app, packageName, navController, onChange, depth + 1)
         }
     }
 }
