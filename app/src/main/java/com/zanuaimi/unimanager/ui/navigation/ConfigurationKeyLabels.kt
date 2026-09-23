@@ -55,34 +55,45 @@ internal object ConfigurationKeyLabels {
 
     fun presetChoices(app: JSONObject?): List<Choice> = buildList {
         add(Choice("Custom (UniPatches defaults)", "custom"))
-        val catalog = app?.optJSONArray("preset_catalog") ?: return@buildList
-        for (index in 0 until catalog.length()) {
-            val preset = catalog.optJSONObject(index) ?: continue
-            val id = preset.optString("id")
-            if (id.isNotBlank() && id != "custom") {
-                add(Choice(preset.optString("name").ifBlank { id }, id))
+        val catalog = app?.optJSONArray("preset_catalog")
+        if (catalog != null && catalog.length() > 0) {
+            for (index in 0 until catalog.length()) {
+                val preset = catalog.optJSONObject(index) ?: continue
+                val id = preset.optString("id")
+                if (id.isNotBlank() && id != "custom") {
+                    add(Choice(preset.optString("name").ifBlank { id }, id))
+                }
             }
+        } else {
+            BuiltInOverlayPresets.definitions.forEach { add(Choice(it.name, it.id)) }
         }
     }
 
     fun presetConfiguration(app: JSONObject?, id: String): JSONObject? {
-        val catalog = app?.optJSONArray("preset_catalog") ?: return null
-        for (index in 0 until catalog.length()) {
-            val preset = catalog.optJSONObject(index) ?: continue
-            if (preset.optString("id") == id) {
-                return preset.optJSONObject("configuration")?.let { JSONObject(it.toString()) }
+        app?.optJSONArray("preset_catalog")?.let { catalog ->
+            for (index in 0 until catalog.length()) {
+                val preset = catalog.optJSONObject(index) ?: continue
+                if (preset.optString("id") == id) {
+                    preset.optJSONObject("configuration")?.let { return JSONObject(it.toString()) }
+                }
             }
         }
-        return null
+        return BuiltInOverlayPresets.definitions
+            .firstOrNull { it.id == id }
+            ?.configuration
+            ?.let { JSONObject(it.toString()) }
     }
 
     fun presetVersion(app: JSONObject?, id: String): Int? {
-        val catalog = app?.optJSONArray("preset_catalog") ?: return null
-        for (index in 0 until catalog.length()) {
-            val preset = catalog.optJSONObject(index) ?: continue
-            if (preset.optString("id") == id) return preset.optInt("version").takeIf { it > 0 }
+        app?.optJSONArray("preset_catalog")?.let { catalog ->
+            for (index in 0 until catalog.length()) {
+                val preset = catalog.optJSONObject(index) ?: continue
+                if (preset.optString("id") == id) {
+                    preset.optInt("version").takeIf { it > 0 }?.let { return it }
+                }
+            }
         }
-        return null
+        return BuiltInOverlayPresets.definitions.firstOrNull { it.id == id }?.version
     }
 
     fun type(app: JSONObject?, key: String): String? = descriptor(app, key)?.type
