@@ -68,6 +68,16 @@ internal object ConfigurationKeyLabels {
             normalizedKey == "runtimeOverlayEnableUniManagerIntegration" -> "Overlay integration > UniManager > Enable integration"
             normalizedKey == "runtimeOverlayRememberUniManagerRuntimeChanges" -> "Overlay integration > UniManager > Remember runtime changes"
             normalizedKey == "runtimeOverlaySelectedPreset" -> "Quick setup > UI preset"
+            normalizedKey == "runtimeOverlayActivateStatisticsOnLaunch" -> "Module Settings > Statistic Modules Settings > Activate statistics on launch"
+            normalizedKey == "runtimeOverlayEnableMonitorsOnLaunch" -> "Module Settings > Statistic Modules Settings > Enable monitors on launch"
+            normalizedKey in setOf(
+                "runtimeOverlayStatisticMonitorPosition",
+                "runtimeOverlayMonitorScale",
+                "runtimeOverlayMonitorColumns",
+                "runtimeOverlayTemperatureFormat",
+                "runtimeOverlayTimeFormat",
+            ) -> "Module Settings > Statistic Modules Settings > ${title(normalizedKey.removePrefix("runtimeOverlay"))}"
+            normalizedKey == "runtimeOverlayEnableOverlayRuntimeLogsOnLaunch" -> "Module Settings > Overlay Runtime Log Settings > Enable runtime log on launch"
             normalizedKey.startsWith("runtimeOverlayInclude") -> "Modules > ${title(normalizedKey.removePrefix("runtimeOverlayInclude"))}"
             normalizedKey.startsWith("runtimeOverlayBottomButton") -> "UI settings > Bottom buttons > ${title(normalizedKey.removePrefix("runtimeOverlayBottomButton"))}"
             normalizedKey.startsWith("runtimeOverlayMenuText") -> "UI settings > Colors > ${title(normalizedKey.removePrefix("runtimeOverlayMenu"))}"
