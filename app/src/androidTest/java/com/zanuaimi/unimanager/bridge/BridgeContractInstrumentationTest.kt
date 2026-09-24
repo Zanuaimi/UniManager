@@ -97,6 +97,22 @@ class BridgeContractInstrumentationTest {
         assertEquals(true, response.configuration?.getBoolean("runtimeOverlayActivateStatisticsOnLaunch"))
     }
 
+    @Test
+    fun changedPatchFingerprintRequiresRegistrationBeforeNewDefaultsAreUsed() {
+        val service = FakeManagerService()
+        service.request(BridgeProtocol.REGISTER, registration("unipatches", false, fingerprint = "patch-a"))
+        service.updateConfiguration(JSONObject().put("runtimeOverlaySelectedPreset", "morpheBlue"))
+
+        val existing = service.request(BridgeProtocol.READ, payload())
+        assertEquals("patch-a", existing.fingerprint)
+        assertEquals("morpheBlue", existing.configuration?.getString("runtimeOverlaySelectedPreset"))
+
+        service.request(BridgeProtocol.REGISTER, registration("unipatches", false, fingerprint = "patch-b"))
+        val repatched = service.request(BridgeProtocol.READ, payload())
+        assertEquals("patch-b", repatched.fingerprint)
+        assertEquals("morpheBlue", repatched.configuration?.getString("runtimeOverlaySelectedPreset"))
+    }
+
     private fun retry(service: FakeManagerService, operation: Int, payload: String): FakeResponse {
         repeat(3) {
             val response = service.request(operation, payload)
@@ -107,7 +123,7 @@ class BridgeContractInstrumentationTest {
 
     private fun payload(): String = JSONObject().put("package_name", packageName).toString()
 
-    private fun registration(preset: String, monitors: Boolean, vararg capabilities: String): String {
+    private fun registration(preset: String, monitors: Boolean, vararg capabilities: String, fingerprint: String = ""): String {
         val values = JSONObject()
             .put("runtimeOverlaySelectedPreset", preset)
             .put("runtimeOverlayEnableMonitorsOnLaunch", monitors)
@@ -115,6 +131,7 @@ class BridgeContractInstrumentationTest {
             .put("package_name", packageName)
             .put("capabilities", org.json.JSONArray(capabilities.toList() + "overlay.config.v2"))
             .put("configuration", values)
+            .apply { if (fingerprint.isNotBlank()) put("metadata_fingerprint", fingerprint) }
             .toString()
     }
 
@@ -125,6 +142,7 @@ class BridgeContractInstrumentationTest {
     ) {
         private val configurations = mutableMapOf<String, JSONObject>()
         private val capabilities = mutableMapOf<String, org.json.JSONArray>()
+        private val fingerprints = mutableMapOf<String, String>()
 
         fun request(operation: Int, rawPayload: String): FakeResponse {
             if (!available || unavailableRequests-- > 0) {
@@ -144,7 +162,8 @@ class BridgeContractInstrumentationTest {
                     incoming.keys().forEach { key -> if (!merged.has(key)) merged.put(key, incoming.get(key)) }
                     configurations[packageName] = merged
                     capabilities[packageName] = payload.optJSONArray("capabilities") ?: org.json.JSONArray()
-                    FakeResponse(BridgeProtocol.OK, operation = "register", packageName = packageName, configuration = merged, capabilities = capabilities[packageName])
+                    fingerprints[packageName] = payload.optString("metadata_fingerprint")
+                    FakeResponse(BridgeProtocol.OK, operation = "register", packageName = packageName, configuration = merged, capabilities = capabilities[packageName], fingerprint = fingerprints[packageName].orEmpty())
                 }
                 BridgeProtocol.UPDATE -> {
                     val current = configurations[packageName]
@@ -162,7 +181,7 @@ class BridgeContractInstrumentationTest {
                         .map { capabilities[packageName]?.optString(it).orEmpty() }
                         .firstOrNull { it !in known }
                     if (unsupported != null) return FakeResponse(BridgeProtocol.UNSUPPORTED, "unsupported_capability:$unsupported")
-                    FakeResponse(BridgeProtocol.OK, operation = "read", packageName = packageName, configuration = current, capabilities = capabilities[packageName])
+                    FakeResponse(BridgeProtocol.OK, operation = "read", packageName = packageName, configuration = current, capabilities = capabilities[packageName], fingerprint = fingerprints[packageName].orEmpty())
                 }
                 else -> FakeResponse(BridgeProtocol.UNSUPPORTED, "unsupported_operation")
             }
@@ -182,5 +201,6 @@ class BridgeContractInstrumentationTest {
         val packageName: String = "",
         val configuration: JSONObject? = null,
         val capabilities: org.json.JSONArray? = null,
+        val fingerprint: String = "",
     )
 }

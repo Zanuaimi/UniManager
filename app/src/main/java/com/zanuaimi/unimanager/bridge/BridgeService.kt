@@ -100,7 +100,7 @@ class BridgeService : Service() {
                         "read",
                         packageName,
                         registry.status(app).detail,
-                        fingerprint = app.optString("manager_metadata_fingerprint"),
+                        fingerprint = app.optString("metadata_fingerprint"),
                         capabilities = app.optJSONArray("capabilities"),
                     )
                     else -> BridgeProtocol.response(
@@ -108,7 +108,7 @@ class BridgeService : Service() {
                         "read",
                         packageName,
                         configuration = app.optJSONObject("configuration") ?: JSONObject(),
-                        fingerprint = app.optString("manager_metadata_fingerprint"),
+                        fingerprint = app.optString("metadata_fingerprint"),
                         capabilities = app.optJSONArray("capabilities"),
                     )
                 }
@@ -129,7 +129,7 @@ class BridgeService : Service() {
                     "register",
                     packageName,
                     configuration = app.optJSONObject("configuration") ?: JSONObject(),
-                    fingerprint = app.optString("manager_metadata_fingerprint"),
+                    fingerprint = app.optString("metadata_fingerprint"),
                     capabilities = app.optJSONArray("capabilities"),
                 )
             }
@@ -149,7 +149,7 @@ class BridgeService : Service() {
                     "update",
                     packageName,
                     configuration = app.optJSONObject("configuration") ?: JSONObject(),
-                    fingerprint = app.optString("manager_metadata_fingerprint"),
+                    fingerprint = app.optString("metadata_fingerprint"),
                     capabilities = app.optJSONArray("capabilities"),
                 )
             }
