@@ -7,7 +7,7 @@ import java.nio.charset.StandardCharsets
 
 class AppRegistry(context: Context) {
     companion object {
-        const val PROTOCOL_VERSION = 1
+        const val PROTOCOL_VERSION = 2
         const val CAPABILITY_OVERLAY = "overlay.config.v2"
         const val CAPABILITY_BLOCK_ADS = "block_ads.v1"
         const val CAPABILITY_BLOCK_HOSTS = "block_ads_hosts.v1"
