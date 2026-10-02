@@ -11,10 +11,12 @@ class AppRegistry(context: Context) {
         const val CAPABILITY_OVERLAY = "overlay.config.v2"
         const val CAPABILITY_BLOCK_ADS = "block_ads.v1"
         const val CAPABILITY_BLOCK_HOSTS = "block_ads_hosts.v1"
+        const val CAPABILITY_PERMISSION_GUARD = "permission.guard.v1"
         private val SUPPORTED_CAPABILITIES = setOf(
             CAPABILITY_OVERLAY,
             CAPABILITY_BLOCK_ADS,
             CAPABILITY_BLOCK_HOSTS,
+            CAPABILITY_PERMISSION_GUARD,
         )
         const val MAX_PAYLOAD_BYTES = 512 * 1024
     }
@@ -245,6 +247,7 @@ class AppRegistry(context: Context) {
             when (patchIds.optJSONObject(index)?.optString("id")) {
                 "universal-overlay" -> prefixes += "runtimeOverlay"
                 "control-app-ads", "ads-block" -> prefixes += "block_"
+                "permission-guard" -> prefixes += "permissionGuard"
             }
         }
         if (prefixes.isEmpty()) return
