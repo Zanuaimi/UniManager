@@ -115,13 +115,14 @@ internal object ConfigurationKeyLabels {
             normalizedKey.startsWith("block_") -> "Block Ads > ${title(normalizedKey.removePrefix("block_"))}"
             normalizedKey == "permissionGuardRuntimeOverlay" -> "Overlay integration > Runtime controls > Permission Guard"
             normalizedKey == "permissionGuardEnableUniManagerIntegration" -> "Quick setup > UniManager > Enable UniManager integration"
+            normalizedKey == "permissionGuardInternet" -> "Permission groups > Internet > Block INTERNET Permission Checks"
             normalizedKey.startsWith("permissionGuard") -> {
                 val group = normalizedKey.removePrefix("permissionGuard")
                 val label = when (group) {
                     "Sms" -> "SMS"
                     "NearbyDevices" -> "Nearby devices"
                     "Bluetooth" -> "Legacy Bluetooth"
-                    "Internet" -> "Internet Access"
+                    "Internet" -> "Internet"
                     else -> title(group)
                 }
                 "Permission groups > $label > Block $label"
