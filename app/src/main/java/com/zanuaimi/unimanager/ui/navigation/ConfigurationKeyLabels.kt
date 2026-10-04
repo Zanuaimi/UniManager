@@ -121,6 +121,7 @@ internal object ConfigurationKeyLabels {
                     "Sms" -> "SMS"
                     "NearbyDevices" -> "Nearby devices"
                     "Bluetooth" -> "Legacy Bluetooth"
+                    "Internet" -> "Internet Access"
                     else -> title(group)
                 }
                 "Permission groups > $label > Block $label"
