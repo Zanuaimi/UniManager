@@ -113,7 +113,18 @@ internal object ConfigurationKeyLabels {
             normalizedKey == "block_ads" -> "Block Ads > Enable"
             normalizedKey == "block_hosts" -> "Block Ads / Tracking Hosts > Enable"
             normalizedKey.startsWith("block_") -> "Block Ads > ${title(normalizedKey.removePrefix("block_"))}"
-            normalizedKey.startsWith("permissionGuard") -> "Permission Guard > ${title(normalizedKey.removePrefix("permissionGuard"))}"
+            normalizedKey == "permissionGuardRuntimeOverlay" -> "Overlay integration > Runtime controls > Permission Guard"
+            normalizedKey == "permissionGuardEnableUniManagerIntegration" -> "Quick setup > UniManager > Enable UniManager integration"
+            normalizedKey.startsWith("permissionGuard") -> {
+                val group = normalizedKey.removePrefix("permissionGuard")
+                val label = when (group) {
+                    "Sms" -> "SMS"
+                    "NearbyDevices" -> "Nearby devices"
+                    "Bluetooth" -> "Legacy Bluetooth"
+                    else -> title(group)
+                }
+                "Permission groups > $label > Block $label"
+            }
             normalizedKey == "runtimeOverlayEnableUniManagerIntegration" -> "Overlay integration > UniManager > Enable integration"
             normalizedKey == "runtimeOverlayRememberUniManagerRuntimeChanges" -> "Overlay integration > UniManager > Remember runtime changes"
             normalizedKey == "runtimeOverlaySelectedPreset" -> "UI preset"
@@ -188,7 +199,7 @@ internal object ConfigurationKeyLabels {
     private fun patchDisplayName(id: String): String = when (id) {
         "control-app-ads", "ads-block" -> "Ads Block Patch"
         "universal-overlay" -> "Universal Overlay Patch"
-        "permission-guard" -> "Permission Guard Patch"
+        "permission-guard" -> "Permission Guard Patch ( Experimental, Overlay Support, UniManager Support )"
         else -> "${title(id)} Patch"
     }
 
